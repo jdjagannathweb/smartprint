@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="or">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ଦୋକାନୀ ଲଗ୍ଇନ୍ - Smart Print Cloud</title>
+  <link rel="stylesheet" href="/static/css/admin.css">
+  <style>
+    body {
+      background: #f1f5f9;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+    .login-container {
+      max-width: 440px;
+      margin: 60px auto;
+      padding: 0 16px;
+      width: 100%;
+    }
+    .login-card {
+      background: #ffffff;
+      border-radius: 20px;
+      padding: 36px 28px;
+      box-shadow: 0 12px 35px rgba(0,0,0,0.06);
+      border: 1px solid #e2e8f0;
+    }
+    .form-group {
+      margin-bottom: 20px;
+    }
+    .form-group label {
+      display: block;
+      font-weight: 700;
+      color: #1e293b;
+      margin-bottom: 8px;
+      font-size: 0.95rem;
+    }
+    .form-group input {
+      width: 100%;
+      padding: 12px 16px;
+      border: 1.5px solid #cbd5e1;
+      border-radius: 10px;
+      font-size: 1rem;
+      transition: all 0.2s;
+      outline: none;
+      box-sizing: border-box;
+    }
+    .form-group input:focus {
+      border-color: #2563eb;
+      box-shadow: 0 0 0 3px rgba(37,99,235,0.15);
+    }
+  </style>
+</head>
+<body>
+
+  <!-- NAVBAR -->
+  <header style="background: #0f172a; padding: 14px 24px; display: flex; justify-content: space-between; align-items: center;">
+    <a href="/" style="display: flex; align-items: center; gap: 10px; color: #fff; text-decoration: none;">
+      <span style="font-size: 1.6rem;">🖨️</span>
+      <span style="font-weight: 800; font-size: 1.15rem;">SMART PRINT CLOUD</span>
+    </a>
+    <a href="/register" class="btn btn-sm btn-primary">🏪 ଫ୍ରି ରେଜିଷ୍ଟ୍ରେସନ୍</a>
+  </header>
+
+  <div class="login-container">
+    <div class="login-card">
+      <div style="text-align: center; margin-bottom: 24px;">
+        <span style="font-size: 2.5rem;">🔑</span>
+        <h2 style="font-size: 1.5rem; color: #0f172a; margin: 8px 0 4px; font-weight: 800;">ଦୋକାନୀ ଲଗ୍ଇନ୍</h2>
+        <p style="color: #64748b; font-size: 0.88rem;">ଆପଣଙ୍କ ଦୋକାନ କଣ୍ଟ୍ରୋଲ୍ ପ୍ୟାନେଲ୍ କୁ ପ୍ରବେଶ କରନ୍ତୁ</p>
+      </div>
+
+      <div id="errorAlert" style="display: none; background: #fef2f2; border-left: 4px solid #ef4444; color: #991b1b; padding: 12px 16px; border-radius: 8px; margin-bottom: 20px; font-size: 0.9rem;"></div>
+
+      <form id="loginForm" onsubmit="handleLogin(event)">
+        <div class="form-group">
+          <label for="mobile">📱 ମୋବାଇଲ୍ ନମ୍ବର (Mobile Number)</label>
+          <input type="tel" id="mobile" placeholder="ଆପଣଙ୍କ ୧୦-ଅଙ୍କ ମୋବାଇଲ୍ ନମ୍ବର" required>
+        </div>
+
+        <div class="form-group">
+          <label for="password">🔒 ପାସୱାର୍ଡ (Password)</label>
+          <input type="password" id="password" placeholder="ଆପଣଙ୍କ ପାସୱାର୍ଡ ଦିଅନ୍ତୁ" required>
+        </div>
+
+        <button type="submit" id="btnSubmit" class="btn btn-primary" style="width: 100%; padding: 13px; font-size: 1.05rem; font-weight: 700; margin-top: 8px;">
+          🔓 ଡ୍ୟାସବୋର୍ଡ ଖୋଲନ୍ତୁ (Login)
+        </button>
+      </form>
+
+      <div style="text-align: center; margin-top: 24px; font-size: 0.92rem; color: #64748b;">
+        ନୂଆ ଦୋକାନୀ ଅଟନ୍ତି କି? <br>
+        <a href="/register" style="color: #059669; font-weight: 700; text-decoration: none; display: inline-block; margin-top: 6px;">
+          🎁 ୬ ମାସ ମାଗଣାରେ ଏବେ ରେଜିଷ୍ଟର୍ କରନ୍ତୁ
+        </a>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    async function handleLogin(e) {
+      e.preventDefault();
+      const btn = document.getElementById("btnSubmit");
+      const errBox = document.getElementById("errorAlert");
+      errBox.style.display = "none";
+
+      let rawMobile = document.getElementById("mobile").value.replace(/[^0-9]/g, '');
+      if (rawMobile.length > 10 && rawMobile.startsWith("91")) {
+        rawMobile = rawMobile.substring(2);
+      }
+      if (rawMobile.length > 10 && rawMobile.startsWith("0")) {
+        rawMobile = rawMobile.substring(1);
+      }
+
+      const payload = {
+        mobile: rawMobile,
+        password: document.getElementById("password").value.trim()
+      };
+
+      btn.disabled = true;
+      btn.textContent = "⏳ ଯାଞ୍ଚ ହେଉଛି...";
+
+      try {
+        const res = await fetch("/api/auth/login", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload)
+        });
+        const data = await res.json();
+        if (!res.ok) {
+          throw new Error(data.detail || "ଲଗ୍ଇନ୍ ବିଫଳ ହେଲା!");
+        }
+
+        localStorage.setItem("current_shop_id", data.shop.shop_id);
+        localStorage.setItem("current_shop_name", data.shop.shop_name);
+
+        btn.textContent = "✅ ସଫଳ ହେଲା! ଡ୍ୟାସବୋର୍ଡ ଖୋଲୁଛି...";
+        setTimeout(() => {
+          window.location.href = "/dashboard";
+        }, 500);
+      } catch (err) {
+        errBox.textContent = err.message;
+        errBox.style.display = "block";
+        btn.disabled = false;
+        btn.textContent = "🔓 ଡ୍ୟାସବୋର୍ଡ ଖୋଲନ୍ତୁ (Login)";
+      }
+    }
+  </script>
+</body>
+</html>

@@ -75,7 +75,7 @@
       <form id="loginForm" onsubmit="handleLogin(event)">
         <div class="form-group">
           <label for="mobile">📱 ମୋବାଇଲ୍ ନମ୍ବର (Mobile Number)</label>
-          <input type="tel" id="mobile" maxlength="10" placeholder="ଆପଣଙ୍କ ୧୦-ଅଙ୍କ ମୋବାଇଲ୍ ନମ୍ବର" required pattern="[0-9]{10}">
+          <input type="tel" id="mobile" placeholder="ଆପଣଙ୍କ ୧୦-ଅଙ୍କ ମୋବାଇଲ୍ ନମ୍ବର" required>
         </div>
 
         <div class="form-group">
@@ -104,8 +104,16 @@
       const errBox = document.getElementById("errorAlert");
       errBox.style.display = "none";
 
+      let rawMobile = document.getElementById("mobile").value.replace(/[^0-9]/g, '');
+      if (rawMobile.length > 10 && rawMobile.startsWith("91")) {
+        rawMobile = rawMobile.substring(2);
+      }
+      if (rawMobile.length > 10 && rawMobile.startsWith("0")) {
+        rawMobile = rawMobile.substring(1);
+      }
+
       const payload = {
-        mobile: document.getElementById("mobile").value.trim(),
+        mobile: rawMobile,
         password: document.getElementById("password").value.trim()
       };
 

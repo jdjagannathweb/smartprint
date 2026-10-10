@@ -111,7 +111,7 @@
 
         <div class="form-group">
           <label for="mobile">📱 ମୋବାଇଲ୍ ନମ୍ବର (Mobile Number) *</label>
-          <input type="tel" id="mobile" maxlength="10" placeholder="୧୦-ଅଙ୍କ ବିଶିଷ୍ଟ ମୋବାଇଲ୍ ନମ୍ବର" required pattern="[0-9]{10}">
+          <input type="tel" id="mobile" placeholder="୧୦-ଅଙ୍କ ବିଶିଷ୍ଟ ମୋବାଇଲ୍ ନମ୍ବର" required>
           <div class="form-hint">ଏହି ନମ୍ବର ଆପଣଙ୍କ ଲଗ୍ଇନ୍ ID ଭାବେ ବ୍ୟବହାର ହେବ।</div>
         </div>
 
@@ -179,6 +179,9 @@
       if (rawMobile.length > 10 && rawMobile.startsWith("91")) {
         rawMobile = rawMobile.substring(2);
       }
+      if (rawMobile.length > 10 && rawMobile.startsWith("0")) {
+        rawMobile = rawMobile.substring(1);
+      }
       if (rawMobile.length !== 10) {
         errBox.innerHTML = "⚠️ ଦୟାକରି ସଠିକ୍ ୧୦-ଅଙ୍କ ବିଶିଷ୍ଟ ମୋବାଇଲ୍ ନମ୍ବର ଦିଅନ୍ତୁ।";
         errBox.style.display = "block";
@@ -190,8 +193,8 @@
         owner_name: document.getElementById("ownerName").value.trim(),
         mobile: rawMobile,
         password: document.getElementById("password").value.trim(),
-        slug: document.getElementById("slug").value.trim() || null,
-        upi_id: document.getElementById("upiId").value.trim()
+        slug: document.getElementById("slug").value.trim() || "",
+        upi_id: document.getElementById("upiId").value.trim() || ""
       };
 
       btn.disabled = true;
@@ -205,9 +208,16 @@
         });
         const data = await res.json();
         if (!res.ok) {
-          let msg = data.detail || data.error || "ରେଜିଷ୍ଟ୍ରେସନ୍ ବିଫଳ ହେଲା!";
+          let msg = "ରେଜିଷ୍ଟ୍ରେସନ୍ ବିଫଳ ହେଲା!";
+          if (typeof data.detail === "string") {
+            msg = data.detail;
+          } else if (Array.isArray(data.detail)) {
+            msg = data.detail.map(d => d.msg || JSON.stringify(d)).join(", ");
+          } else if (data.error) {
+            msg = data.error;
+          }
           if (msg.includes("ପୂର୍ବରୁ ପଞ୍ଜିକୃତ")) {
-            msg += `<br><a href="/login" style="color: #2563eb; font-weight: 800; text-decoration: underline; display: inline-block; margin-top: 6px;">👉 ଏଠାରେ ଲଗ୍ଇନ୍ କରନ୍ତୁ (Login Here)</a>`;
+            msg += `<br><div style="margin-top: 10px;"><a href="/login" style="background: #2563eb; color: #fff; padding: 6px 14px; border-radius: 8px; text-decoration: none; font-weight: 700; display: inline-block;">👉 ଏଠାରେ ଲଗ୍ଇନ୍ କରନ୍ତୁ (Click to Login)</a></div>`;
           }
           throw new Error(msg);
         }

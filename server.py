@@ -9,6 +9,7 @@ from fastapi import FastAPI, UploadFile, File, Form, HTTPException, BackgroundTa
 from fastapi.responses import HTMLResponse, FileResponse, JSONResponse, PlainTextResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
+from typing import Optional
 from pydantic import BaseModel
 
 import database
@@ -109,8 +110,8 @@ class RegisterRequest(BaseModel):
     owner_name: str
     mobile: str
     password: str
-    slug: str = None
-    upi_id: str = ""
+    slug: Optional[str] = None
+    upi_id: Optional[str] = None
 
 @app.post("/api/auth/register")
 def register_member(body: RegisterRequest):
@@ -119,8 +120,8 @@ def register_member(body: RegisterRequest):
         owner_name=body.owner_name.strip(),
         mobile=body.mobile.strip(),
         password=body.password.strip(),
-        slug=body.slug.strip() if body.slug else None,
-        upi_id=body.upi_id.strip()
+        slug=body.slug.strip() if body.slug else "",
+        upi_id=body.upi_id.strip() if body.upi_id else ""
     )
     if "error" in res:
         raise HTTPException(status_code=400, detail=res["error"])
