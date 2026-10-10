@@ -570,6 +570,62 @@ def superadmin_toggle_shop(body: ToggleShopRequest):
     database.toggle_shop_active(body.shop_id)
     return {"success": True}
 
+class SuperAdminShopUpdateRequest(BaseModel):
+    pin: str
+    shop_id: str
+    shop_name: str
+    owner_name: str
+    mobile: str
+    slug: str
+    password: Optional[str] = None
+    upi_id: Optional[str] = ""
+    rate_bw: float = 2.0
+    rate_color: float = 10.0
+    is_active: int = 1
+    subscription_expires_at: Optional[str] = None
+
+@app.post("/api/superadmin/shop/update")
+def superadmin_update_shop_endpoint(body: SuperAdminShopUpdateRequest):
+    master_pin = database.get_saas_setting("master_pin", "1234")
+    if body.pin.strip() != master_pin:
+        raise HTTPException(status_code=401, detail="Unauthorized")
+    
+    data = body.model_dump()
+    res = database.superadmin_update_shop(body.shop_id, data)
+    if "error" in res:
+        raise HTTPException(status_code=400, detail=res["error"])
+    return {"success": True}
+
+class SuperAdminResetPasswordRequest(BaseModel):
+    pin: str
+    shop_id: str
+    new_password: str
+
+@app.post("/api/superadmin/shop/reset-password")
+def superadmin_reset_password_endpoint(body: SuperAdminResetPasswordRequest):
+    master_pin = database.get_saas_setting("master_pin", "1234")
+    if body.pin.strip() != master_pin:
+        raise HTTPException(status_code=401, detail="Unauthorized")
+    
+    if not body.new_password or len(body.new_password.strip()) < 4:
+        raise HTTPException(status_code=400, detail="Password must be at least 4 characters")
+        
+    database.superadmin_reset_password(body.shop_id, body.new_password.strip())
+    return {"success": True}
+
+class SuperAdminDeleteShopRequest(BaseModel):
+    pin: str
+    shop_id: str
+
+@app.post("/api/superadmin/shop/delete")
+def superadmin_delete_shop_endpoint(body: SuperAdminDeleteShopRequest):
+    master_pin = database.get_saas_setting("master_pin", "1234")
+    if body.pin.strip() != master_pin:
+        raise HTTPException(status_code=401, detail="Unauthorized")
+        
+    database.superadmin_delete_shop(body.shop_id)
+    return {"success": True}
+
 class UpdatePlansRequest(BaseModel):
     pin: str
     plan1_name: str

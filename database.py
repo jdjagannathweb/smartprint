@@ -423,5 +423,91 @@ def toggle_shop_active(shop_id):
     conn.close()
     return True
 
+def superadmin_update_shop(shop_id, data):
+    conn = get_connection()
+    c = conn.cursor()
+    c.execute("SELECT id, mobile, slug FROM shops WHERE shop_id = ?", (shop_id,))
+    shop = c.fetchone()
+    if not shop:
+        conn.close()
+        return {"error": "ଦୋକାନୀ ମିଳିଲା ନାହିଁ (Shop not found)"}
+    
+    # Check mobile uniqueness if changed
+    new_mobile = str(data.get("mobile", "")).strip()
+    if new_mobile and new_mobile != shop["mobile"]:
+        c.execute("SELECT id FROM shops WHERE mobile = ? AND shop_id != ?", (new_mobile, shop_id))
+        if c.fetchone():
+            conn.close()
+            return {"error": f"ଏହି ମୋବାଇଲ୍ ନମ୍ବର ({new_mobile}) ଅନ୍ୟ ଏକ ଦୋକାନରେ ପୂର୍ବରୁ ପଞ୍ଜିକୃତ ଅଛି!"}
+            
+    # Check slug uniqueness if changed
+    new_slug = str(data.get("slug", "")).strip().lower()
+    if new_slug and new_slug != shop["slug"]:
+        c.execute("SELECT id FROM shops WHERE slug = ? AND shop_id != ?", (new_slug, shop_id))
+        if c.fetchone():
+            conn.close()
+            return {"error": f"ଏହି ୱେବ୍ Slug ({new_slug}) ଅନ୍ୟ ଏକ ଦୋକାନରେ ପୂର୍ବରୁ ବ୍ୟବହୃତ ହୋଇଛି!"}
+
+    fields = []
+    params = []
+    
+    if "shop_name" in data and data["shop_name"]:
+        fields.append("shop_name = ?")
+        params.append(str(data["shop_name"]).strip())
+    if "owner_name" in data and data["owner_name"]:
+        fields.append("owner_name = ?")
+        params.append(str(data["owner_name"]).strip())
+    if new_mobile:
+        fields.append("mobile = ?")
+        params.append(new_mobile)
+    if new_slug:
+        fields.append("slug = ?")
+        params.append(new_slug)
+    if "password" in data and data["password"]:
+        fields.append("password = ?")
+        params.append(str(data["password"]).strip())
+    if "upi_id" in data:
+        fields.append("upi_id = ?")
+        params.append(str(data["upi_id"] or "").strip())
+    if "rate_bw" in data and data["rate_bw"] is not None:
+        fields.append("rate_bw = ?")
+        params.append(float(data["rate_bw"]))
+    if "rate_color" in data and data["rate_color"] is not None:
+        fields.append("rate_color = ?")
+        params.append(float(data["rate_color"]))
+    if "is_active" in data and data["is_active"] is not None:
+        fields.append("is_active = ?")
+        params.append(int(data["is_active"]))
+    if "subscription_expires_at" in data and data["subscription_expires_at"]:
+        fields.append("subscription_expires_at = ?")
+        params.append(str(data["subscription_expires_at"]).strip())
+        
+    if fields:
+        params.append(shop_id)
+        query = f"UPDATE shops SET {', '.join(fields)} WHERE shop_id = ?"
+        c.execute(query, tuple(params))
+        conn.commit()
+        
+    conn.close()
+    return {"success": True}
+
+def superadmin_reset_password(shop_id, new_password):
+    conn = get_connection()
+    c = conn.cursor()
+    c.execute("UPDATE shops SET password = ? WHERE shop_id = ?", (new_password.strip(), shop_id))
+    conn.commit()
+    conn.close()
+    return True
+
+def superadmin_delete_shop(shop_id):
+    conn = get_connection()
+    c = conn.cursor()
+    c.execute("DELETE FROM jobs WHERE shop_id = ?", (shop_id,))
+    c.execute("DELETE FROM renewal_requests WHERE shop_id = ?", (shop_id,))
+    c.execute("DELETE FROM shops WHERE shop_id = ?", (shop_id,))
+    conn.commit()
+    conn.close()
+    return True
+
 # Initialize DB on import
 init_db()

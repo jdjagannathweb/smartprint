@@ -152,6 +152,66 @@
       padding: 36px 28px;
       text-align: center;
     }
+    .sa-modal-overlay {
+      position: fixed;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background: rgba(7, 13, 30, 0.85);
+      backdrop-filter: blur(4px);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      z-index: 1500;
+      padding: 16px;
+    }
+    .sa-modal-card {
+      background: #162447;
+      border: 1px solid #23386b;
+      border-radius: 20px;
+      max-width: 650px;
+      width: 100%;
+      padding: 28px;
+      box-shadow: 0 25px 50px rgba(0,0,0,0.5);
+      max-height: 90vh;
+      overflow-y: auto;
+    }
+    .sa-modal-card h3 {
+      color: #fff;
+      margin: 0;
+      font-size: 1.3rem;
+    }
+    .sa-form-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+      margin-top: 14px;
+    }
+    .sa-form-group {
+      margin-bottom: 12px;
+    }
+    .sa-form-group label {
+      display: block;
+      color: #94a3b8;
+      font-size: 0.85rem;
+      font-weight: 600;
+      margin-bottom: 6px;
+    }
+    .sa-form-group input, .sa-form-group select {
+      width: 100%;
+      padding: 10px 14px;
+      border-radius: 8px;
+      border: 1px solid #23386b;
+      background: #0b1329;
+      color: #fff;
+      outline: none;
+      font-size: 0.95rem;
+      box-sizing: border-box;
+    }
+    .sa-form-group input:focus, .sa-form-group select:focus {
+      border-color: #38bdf8;
+    }
+    @media (max-width: 640px) {
+      .sa-form-grid { grid-template-columns: 1fr; }
+    }
   </style>
 </head>
 <body>
@@ -348,6 +408,122 @@
     </section>
 
   </main>
+
+  <!-- EDIT SHOP PROFILE MODAL -->
+  <div class="sa-modal-overlay" id="editShopModal">
+    <div class="sa-modal-card">
+      <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #23386b; padding-bottom: 14px; margin-bottom: 16px;">
+        <h3 style="display: flex; align-items: center; gap: 8px;">
+          <span>✏️</span> ଦୋକାନୀ ପ୍ରୋଫାଇଲ୍ ସମ୍ପାଦନା (Edit Shop Profile)
+        </h3>
+        <button type="button" onclick="closeEditShopModal()" style="background: none; border: none; color: #94a3b8; font-size: 1.5rem; cursor: pointer;">✕</button>
+      </div>
+
+      <form onsubmit="handleSaveShopEdit(event)">
+        <input type="hidden" id="editShopId">
+
+        <div class="sa-form-grid">
+          <div class="sa-form-group">
+            <label>🏪 ଦୋକାନର ନାମ (Shop Name) *</label>
+            <input type="text" id="editShopName" required>
+          </div>
+          <div class="sa-form-group">
+            <label>👤 ମାଲିକଙ୍କ ନାମ (Owner Name) *</label>
+            <input type="text" id="editOwnerName" required>
+          </div>
+        </div>
+
+        <div class="sa-form-grid">
+          <div class="sa-form-group">
+            <label>📱 ମୋବାଇଲ୍ ନମ୍ବର (Mobile) *</label>
+            <input type="tel" id="editMobile" required>
+          </div>
+          <div class="sa-form-group">
+            <label>🔒 ପାସୱାର୍ଡ (Password) *</label>
+            <input type="text" id="editPassword" required minlength="4">
+          </div>
+        </div>
+
+        <div class="sa-form-grid">
+          <div class="sa-form-group">
+            <label>🔗 ଗ୍ରାହକ ଲିଙ୍କ୍ କୋଡ୍ (Slug) *</label>
+            <input type="text" id="editSlug" required>
+          </div>
+          <div class="sa-form-group">
+            <label>💳 ଦୋକାନୀ UPI ID (VPA)</label>
+            <input type="text" id="editUpiId" placeholder="ଉଦାହରଣ: 9876543210@ybl">
+          </div>
+        </div>
+
+        <div class="sa-form-grid">
+          <div class="sa-form-group">
+            <label>🖤 B&W ପ୍ରିଣ୍ଟ୍ ଦର (₹/Page) *</label>
+            <input type="number" step="0.5" id="editRateBw" required>
+          </div>
+          <div class="sa-form-group">
+            <label>🌈 କଲର୍ ପ୍ରିଣ୍ଟ୍ ଦର (₹/Page) *</label>
+            <input type="number" step="0.5" id="editRateColor" required>
+          </div>
+        </div>
+
+        <div class="sa-form-grid">
+          <div class="sa-form-group">
+            <label>📅 ସବସ୍କ୍ରିପସନ୍ Expiry Date</label>
+            <input type="text" id="editExpiryDate" placeholder="YYYY-MM-DD HH:MM:SS" required>
+          </div>
+          <div class="sa-form-group">
+            <label>⚡ ଆକାଉଣ୍ଟ୍ ସ୍ଥିତି (Status)</label>
+            <select id="editIsActive">
+              <option value="1">✅ ସକ୍ରିୟ (Active)</option>
+              <option value="0">⛔ ନିଷ୍କ୍ରିୟ / ବନ୍ଦ (Disabled)</option>
+            </select>
+          </div>
+        </div>
+
+        <div style="display: flex; gap: 12px; margin-top: 24px;">
+          <button type="submit" id="btnSaveShopEdit" class="btn btn-primary" style="flex: 1; padding: 12px; font-weight: 700; background: #0284c7;">
+            💾 ପରିବର୍ତ୍ତନ ସେଭ୍ କରନ୍ତୁ (Save Changes)
+          </button>
+          <button type="button" onclick="closeEditShopModal()" class="btn" style="background: #334155; color: #cbd5e1; padding: 12px 20px;">
+            ବାତିଲ୍ କରନ୍ତୁ
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- QUICK RESET PASSWORD MODAL -->
+  <div class="sa-modal-overlay" id="resetPassModal">
+    <div class="sa-modal-card" style="max-width: 440px;">
+      <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #23386b; padding-bottom: 12px; margin-bottom: 16px;">
+        <h3 style="display: flex; align-items: center; gap: 8px;">
+          <span>🔑</span> ପାସୱାର୍ଡ ରିସେଟ୍ (Password Reset)
+        </h3>
+        <button type="button" onclick="closeResetPassModal()" style="background: none; border: none; color: #94a3b8; font-size: 1.4rem; cursor: pointer;">✕</button>
+      </div>
+
+      <p style="color: #cbd5e1; font-size: 0.88rem; margin-bottom: 16px;">
+        ଦୋକାନ: <b id="resetPassShopNameText" style="color: #38bdf8;"></b> ପାଇଁ ନୂଆ ପାସୱାର୍ଡ ସେଟ୍ କରନ୍ତୁ:
+      </p>
+
+      <form onsubmit="handleSaveResetPassword(event)">
+        <input type="hidden" id="resetPassShopId">
+        <div class="sa-form-group">
+          <label>ନୂଆ ପାସୱାର୍ଡ (New Password) *</label>
+          <input type="text" id="resetPassNewPassword" placeholder="ନୂଆ ପାସୱାର୍ଡ ଦିଅନ୍ତୁ (ଅତି କମରେ ୪ ଅକ୍ଷର)" required minlength="4">
+        </div>
+
+        <div style="display: flex; gap: 10px; margin-top: 20px;">
+          <button type="submit" id="btnSaveResetPass" class="btn btn-primary" style="flex: 1; padding: 12px; font-weight: 700; background: #d97706;">
+            🔑 ପାସୱାର୍ଡ ବଦଳାନ୍ତୁ (Update)
+          </button>
+          <button type="button" onclick="closeResetPassModal()" class="btn" style="background: #334155; color: #cbd5e1; padding: 12px 18px;">
+            ବାତିଲ୍
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
 
   <script src="/static/js/superadmin.js"></script>
 </body>

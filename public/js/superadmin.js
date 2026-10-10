@@ -1,4 +1,5 @@
 let currentPin = sessionStorage.getItem("superadmin_pin") || "";
+let currentShopsList = [];
 
 document.addEventListener("DOMContentLoaded", async () => {
   if (currentPin) {
@@ -89,6 +90,8 @@ async function loadSuperAdminData() {
     document.getElementById("kpiTotalJobs").textContent = overview.total_jobs || 0;
     document.getElementById("kpiTotalPages").textContent = overview.total_pages || 0;
 
+    currentShopsList = shops;
+
     // Table
     const tbody = document.getElementById("membersTableBody");
     if (shops.length === 0) {
@@ -104,7 +107,7 @@ async function loadSuperAdminData() {
         : `<span class="badge-expired">⚠️ ସମାପ୍ତ (୦ ଦିନ)</span>`;
 
       const workActivity = `
-        <div style="font-weight: 700; color: #fff;">${s.job_count || 0} ଟି ପ୍ରିଣ୍ଟ୍ ଅର୍ଡର୍</div>
+        <div style="font-weight: 700; color: #fff;">${s.job_count || 0} ଟି ଅର୍ଡର୍</div>
         <div style="font-size: 0.8rem; color: #94a3b8;">${s.total_pages_printed || 0} ପେଜ୍ ପ୍ରିଣ୍ଟ୍</div>
       `;
 
@@ -112,9 +115,14 @@ async function loadSuperAdminData() {
         <tr>
           <td>
             <div style="font-weight: 700; color: #fff; font-size: 0.95rem;">${escapeHtml(s.shop_name)}</div>
-            <div style="font-size: 0.8rem; color: #94a3b8;">ମାଲିକ: ${escapeHtml(s.owner_name)} (${s.shop_id})</div>
+            <div style="font-size: 0.8rem; color: #94a3b8;">ମାଲିକ: ${escapeHtml(s.owner_name)} <span style="font-size: 0.72rem; color: #64748b;">(${s.shop_id})</span></div>
           </td>
-          <td><b>${s.mobile}</b></td>
+          <td>
+            <div style="font-weight: 700; color: #fff;">📱 ${s.mobile}</div>
+            <div style="font-size: 0.82rem; color: #fbbf24; margin-top: 3px;">
+              🔑 Pass: <code style="background: #0f172a; padding: 2px 6px; border-radius: 4px; color: #38bdf8;">${escapeHtml(s.password)}</code>
+            </div>
+          </td>
           <td>
             <a href="/s/${s.slug}" target="_blank" style="color: #38bdf8; text-decoration: none; font-weight: 600;">
               /s/${s.slug} ↗
@@ -125,14 +133,23 @@ async function loadSuperAdminData() {
           <td style="font-size: 0.82rem; color: #cbd5e1;">${s.subscription_expires_at || "N/A"}</td>
           <td>
             <div style="display: flex; gap: 6px; flex-wrap: wrap;">
-              <button class="btn btn-sm" style="background: #059669; color: #fff; font-size: 0.75rem; padding: 6px 10px;" onclick="extendShopPlan('${s.shop_id}', 180)">
-                +୬ ମାସ (+180d)
+              <button class="btn btn-sm" style="background: #2563eb; color: #fff; font-size: 0.75rem; padding: 5px 8px; font-weight: 700;" onclick="openEditShopModal('${s.shop_id}')" title="ପ୍ରୋଫାଇଲ୍ ସମ୍ପାଦନା">
+                ✏️ ଏଡିଟ୍
               </button>
-              <button class="btn btn-sm" style="background: #0284c7; color: #fff; font-size: 0.75rem; padding: 6px 10px;" onclick="extendShopPlan('${s.shop_id}', 365)">
-                +୧ ବର୍ଷ (+365d)
+              <button class="btn btn-sm" style="background: #d97706; color: #fff; font-size: 0.75rem; padding: 5px 8px; font-weight: 700;" onclick="openResetPassModal('${s.shop_id}')" title="ପାସୱାର୍ଡ ରିସେଟ୍">
+                🔑 ପାସୱାର୍ଡ
               </button>
-              <button class="btn btn-sm" style="background: ${s.is_active ? '#dc2626' : '#16a34a'}; color: #fff; font-size: 0.75rem; padding: 6px 8px;" onclick="toggleShop('${s.shop_id}')">
-                ${s.is_active ? 'ବନ୍ଦ' : 'ଚାଲୁ'}
+              <button class="btn btn-sm" style="background: #059669; color: #fff; font-size: 0.75rem; padding: 5px 8px;" onclick="extendShopPlan('${s.shop_id}', 180)" title="୬ ମାସ ବୃଦ୍ଧି କରନ୍ତୁ">
+                +୬ମାସ
+              </button>
+              <button class="btn btn-sm" style="background: #0284c7; color: #fff; font-size: 0.75rem; padding: 5px 8px;" onclick="extendShopPlan('${s.shop_id}', 365)" title="୧ ବର୍ଷ ବୃଦ୍ଧି କରନ୍ତୁ">
+                +୧ବର୍ଷ
+              </button>
+              <button class="btn btn-sm" style="background: ${s.is_active ? '#475569' : '#16a34a'}; color: #fff; font-size: 0.75rem; padding: 5px 8px;" onclick="toggleShop('${s.shop_id}')" title="${s.is_active ? 'ବନ୍ଦ କରନ୍ତୁ' : 'ଚାଲୁ କରନ୍ତୁ'}">
+                ${s.is_active ? '⏸️' : '▶️'}
+              </button>
+              <button class="btn btn-sm" style="background: #dc2626; color: #fff; font-size: 0.75rem; padding: 5px 8px; font-weight: 700;" onclick="deleteShop('${s.shop_id}')" title="ଦୋକାନୀ ଡିଲିଟ୍">
+                🗑️
               </button>
             </div>
           </td>
@@ -243,4 +260,156 @@ function escapeHtml(text) {
   return text.replace(/[&<>"']/g, function(m) {
     return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#039;" }[m];
   });
+}
+
+// ==================== EDIT SHOP PROFILE ====================
+
+function openEditShopModal(shopId) {
+  const shop = currentShopsList.find(s => s.shop_id === shopId);
+  if (!shop) return;
+
+  document.getElementById("editShopId").value = shop.shop_id;
+  document.getElementById("editShopName").value = shop.shop_name;
+  document.getElementById("editOwnerName").value = shop.owner_name;
+  document.getElementById("editMobile").value = shop.mobile;
+  document.getElementById("editPassword").value = shop.password;
+  document.getElementById("editSlug").value = shop.slug;
+  document.getElementById("editUpiId").value = shop.upi_id || "";
+  document.getElementById("editRateBw").value = shop.rate_bw !== undefined ? shop.rate_bw : 2.0;
+  document.getElementById("editRateColor").value = shop.rate_color !== undefined ? shop.rate_color : 10.0;
+  document.getElementById("editExpiryDate").value = shop.subscription_expires_at || "";
+  document.getElementById("editIsActive").value = shop.is_active ? "1" : "0";
+
+  document.getElementById("editShopModal").style.display = "flex";
+}
+
+function closeEditShopModal() {
+  document.getElementById("editShopModal").style.display = "none";
+}
+
+async function handleSaveShopEdit(e) {
+  e.preventDefault();
+  const btn = document.getElementById("btnSaveShopEdit");
+  btn.disabled = true;
+  btn.textContent = "⏳ ସେଭ୍ ହେଉଛି...";
+
+  const shopId = document.getElementById("editShopId").value;
+  const payload = {
+    pin: currentPin,
+    shop_id: shopId,
+    shop_name: document.getElementById("editShopName").value.trim(),
+    owner_name: document.getElementById("editOwnerName").value.trim(),
+    mobile: document.getElementById("editMobile").value.trim(),
+    password: document.getElementById("editPassword").value.trim(),
+    slug: document.getElementById("editSlug").value.trim(),
+    upi_id: document.getElementById("editUpiId").value.trim(),
+    rate_bw: parseFloat(document.getElementById("editRateBw").value),
+    rate_color: parseFloat(document.getElementById("editRateColor").value),
+    subscription_expires_at: document.getElementById("editExpiryDate").value.trim(),
+    is_active: parseInt(document.getElementById("editIsActive").value, 10)
+  };
+
+  try {
+    const res = await fetch("/api/superadmin/shop/update", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload)
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      throw new Error(data.detail || data.error || "ଅପଡେଟ୍ ବିଫଳ ହେଲା!");
+    }
+
+    alert("✅ ଦୋକାନୀ ପ୍ରୋଫାଇଲ୍ ସଫଳତାର ସହ ଅପଡେଟ୍ ହେଲା!");
+    closeEditShopModal();
+    await loadSuperAdminData();
+  } catch (err) {
+    alert("ଭୁଲ୍: " + err.message);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = "💾 ପରିବର୍ତ୍ତନ ସେଭ୍ କରନ୍ତୁ (Save Changes)";
+  }
+}
+
+// ==================== RESET PASSWORD ====================
+
+function openResetPassModal(shopId) {
+  const shop = currentShopsList.find(s => s.shop_id === shopId);
+  if (!shop) return;
+
+  document.getElementById("resetPassShopId").value = shop.shop_id;
+  document.getElementById("resetPassShopNameText").textContent = `${shop.shop_name} (${shop.mobile})`;
+  document.getElementById("resetPassNewPassword").value = "";
+
+  document.getElementById("resetPassModal").style.display = "flex";
+}
+
+function closeResetPassModal() {
+  document.getElementById("resetPassModal").style.display = "none";
+}
+
+async function handleSaveResetPassword(e) {
+  e.preventDefault();
+  const btn = document.getElementById("btnSaveResetPass");
+  btn.disabled = true;
+  btn.textContent = "⏳ ବଦଳାଯାଉଛି...";
+
+  const shopId = document.getElementById("resetPassShopId").value;
+  const newPass = document.getElementById("resetPassNewPassword").value.trim();
+
+  try {
+    const res = await fetch("/api/superadmin/shop/reset-password", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        pin: currentPin,
+        shop_id: shopId,
+        new_password: newPass
+      })
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      throw new Error(data.detail || "ପାସୱାର୍ଡ ବଦଳି ପାରିଲା ନାହିଁ!");
+    }
+
+    alert(`✅ ପାସୱାର୍ଡ ସଫଳତାର ସହ ବଦଳାଗଲା! ନୂଆ Password: ${newPass}`);
+    closeResetPassModal();
+    await loadSuperAdminData();
+  } catch (err) {
+    alert("ଭୁଲ୍: " + err.message);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = "🔑 ପାସୱାର୍ଡ ବଦଳାନ୍ତୁ (Update)";
+  }
+}
+
+// ==================== DELETE SHOP ====================
+
+async function deleteShop(shopId) {
+  const shop = currentShopsList.find(s => s.shop_id === shopId);
+  const shopName = shop ? shop.shop_name : shopId;
+  const mobile = shop ? shop.mobile : "";
+
+  const confirmMsg = `⚠️ ଚେତାବନୀ: ଆପଣ ସତରେ ଦୋକାନ '${shopName}' (Mob: ${mobile}) କୁ ସମ୍ପୂର୍ଣ୍ଣ ଡିଲିଟ୍ କରିବାକୁ ଚାହାନ୍ତି କି?\n\nଏହା ଡିଲିଟ୍ ହେଲେ ଏହି ଦୋକାନର ସମସ୍ତ ଡାଟା, ଲଗ୍ଇନ୍ ଏବଂ ପ୍ରିଣ୍ଟ୍ ଅର୍ଡର୍ ଚିରଦିନ ପାଇଁ ନଷ୍ଟ ହୋଇଯିବ!`;
+  if (!confirm(confirmMsg)) return;
+
+  try {
+    const res = await fetch("/api/superadmin/shop/delete", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        pin: currentPin,
+        shop_id: shopId
+      })
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      throw new Error(data.detail || "ଡିଲିଟ୍ ବିଫଳ ହେଲା!");
+    }
+
+    alert(`✅ ଦୋକାନ '${shopName}' ସଫଳତାର ସହ ଡିଲିଟ୍ ହୋଇଗଲା!`);
+    await loadSuperAdminData();
+  } catch (err) {
+    alert("Error deleting shop: " + err.message);
+  }
 }
