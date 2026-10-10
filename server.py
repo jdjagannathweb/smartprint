@@ -461,6 +461,60 @@ def connector_confirm_printed(job_id: str, body: ConnectorConfirm):
         delete_job_files(job_id)
     return {"success": True}
 
+CONNECTOR_HEARTBEATS = {}
+
+class ConnectorHeartbeatRequest(BaseModel):
+    shop_id: str
+    token: str
+    status: str = "online"
+    active_printer: Optional[str] = ""
+    printers: Optional[list] = []
+
+@app.post("/api/connector/heartbeat")
+def connector_heartbeat(body: ConnectorHeartbeatRequest):
+    shop = database.get_shop_by_id(body.shop_id)
+    if not shop or shop["connector_token"] != body.token:
+        raise HTTPException(status_code=401, detail="Unauthorized")
+    
+    CONNECTOR_HEARTBEATS[body.shop_id] = {
+        "last_seen": time.time(),
+        "status": body.status,
+        "active_printer": body.active_printer,
+        "printers": body.printers
+    }
+    return {"success": True}
+
+@app.get("/api/shop/{shop_id}/connector-status")
+def get_connector_status(shop_id: str):
+    hb = CONNECTOR_HEARTBEATS.get(shop_id)
+    now = time.time()
+    if hb and (now - hb["last_seen"]) < 20:
+        return {
+            "online": True,
+            "active_printer": hb.get("active_printer", ""),
+            "printers": hb.get("printers", []),
+            "last_seen_seconds_ago": int(now - hb["last_seen"])
+        }
+    return {
+        "online": False,
+        "active_printer": "",
+        "printers": [],
+        "last_seen_seconds_ago": int(now - hb["last_seen"]) if hb else None
+    }
+
+@app.get("/api/connector/download-app")
+def download_windows_app():
+    exe_path = BASE_DIR / "dist" / "SmartPrintConnect.exe"
+    if not exe_path.exists():
+        exe_path = BASE_DIR / "SmartPrintConnect.exe"
+    if exe_path.exists():
+        return FileResponse(exe_path, media_type="application/octet-stream", filename="SmartPrintConnect.exe")
+    
+    zip_path = Path("C:/Users/Jagannath/Downloads/smartprint_fixed_files.zip")
+    if zip_path.exists():
+        return FileResponse(zip_path, media_type="application/zip", filename="SmartPrintApp_Windows.zip")
+    return FileResponse(BASE_DIR / "smart_print_app.py", media_type="text/plain", filename="smart_print_app.py")
+
 @app.get("/api/connector/script")
 def download_connector_python_script():
     return FileResponse(BASE_DIR / "print_connector.py", media_type="text/plain", filename="print_connector.py")

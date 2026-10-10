@@ -14,10 +14,38 @@ document.addEventListener("DOMContentLoaded", async () => {
   await loadShopDetails();
   await loadPrinters();
   await loadJobsTable();
+  await checkDesktopAppStatus();
 
-  // Polling every 3s
+  // Polling
   setInterval(loadJobsTable, 3000);
+  setInterval(checkDesktopAppStatus, 5000);
 });
+
+async function checkDesktopAppStatus() {
+  if (!currentShopId) return;
+  try {
+    const res = await fetch(`/api/shop/${currentShopId}/connector-status`);
+    if (!res.ok) return;
+    const data = await res.json();
+    const badge = document.getElementById("desktopSyncBadge");
+    const infoBox = document.getElementById("desktopAppLiveInfo");
+    const printerName = document.getElementById("desktopLivePrinterName");
+    if (!badge) return;
+
+    if (data.online) {
+      badge.textContent = "🟢 ଲାଇଭ୍ କନେକ୍ଟେଡ୍ (Online)";
+      badge.style.background = "#dcfce7";
+      badge.style.color = "#15803d";
+      if (infoBox) infoBox.style.display = "block";
+      if (printerName) printerName.textContent = data.active_printer || "Default Windows Printer";
+    } else {
+      badge.textContent = "⚪ ଅଫଲାଇନ୍ (Offline)";
+      badge.style.background = "#f1f5f9";
+      badge.style.color = "#64748b";
+      if (infoBox) infoBox.style.display = "none";
+    }
+  } catch (e) {}
+}
 
 function playNotificationChime() {
   try {
