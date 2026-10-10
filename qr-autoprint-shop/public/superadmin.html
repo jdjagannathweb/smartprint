@@ -1,0 +1,354 @@
+<!DOCTYPE html>
+<html lang="or">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ସୁପର୍ ଆଡମିନ୍ କଣ୍ଟ୍ରୋଲ୍ - Smart Print SaaS</title>
+  <link rel="stylesheet" href="/static/css/admin.css">
+  <style>
+    body {
+      background: #0b1329;
+      color: #f8fafc;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+    .sa-header {
+      background: #111e38;
+      border-bottom: 1px solid #1e293b;
+      padding: 16px 24px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 12px;
+    }
+    .sa-title {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .sa-title h1 {
+      font-size: 1.35rem;
+      color: #fff;
+      margin: 0;
+    }
+    .sa-nav {
+      background: #162447;
+      padding: 0 24px;
+      display: flex;
+      gap: 8px;
+      border-bottom: 1px solid #1f2f57;
+      overflow-x: auto;
+    }
+    .sa-tab {
+      background: transparent;
+      border: none;
+      color: #94a3b8;
+      padding: 14px 18px;
+      font-weight: 700;
+      font-size: 0.92rem;
+      cursor: pointer;
+      border-bottom: 3px solid transparent;
+      white-space: nowrap;
+      transition: all 0.2s;
+    }
+    .sa-tab:hover { color: #fff; }
+    .sa-tab.active {
+      color: #38bdf8;
+      border-bottom-color: #38bdf8;
+    }
+    .sa-content {
+      max-width: 1200px;
+      margin: 24px auto;
+      padding: 0 16px;
+      width: 100%;
+      flex: 1;
+    }
+    .sa-card {
+      background: #162447;
+      border-radius: 16px;
+      border: 1px solid #1f2f57;
+      padding: 24px;
+      margin-bottom: 24px;
+      box-shadow: 0 10px 25px rgba(0,0,0,0.25);
+    }
+    .kpi-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+      gap: 16px;
+      margin-bottom: 24px;
+    }
+    .kpi-card {
+      background: #1a2a52;
+      border: 1px solid #23386b;
+      border-radius: 14px;
+      padding: 20px;
+    }
+    .kpi-label {
+      font-size: 0.82rem;
+      color: #94a3b8;
+      font-weight: 600;
+      margin-bottom: 6px;
+    }
+    .kpi-val {
+      font-size: 1.8rem;
+      font-weight: 800;
+      color: #fff;
+    }
+    .sa-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.9rem;
+      color: #cbd5e1;
+    }
+    .sa-table th {
+      background: #111e38;
+      color: #94a3b8;
+      text-align: left;
+      padding: 12px 14px;
+      font-weight: 700;
+      border-bottom: 1px solid #23386b;
+    }
+    .sa-table td {
+      padding: 14px;
+      border-bottom: 1px solid #1f2f57;
+    }
+    .sa-table tr:hover {
+      background: #1d2f5e;
+    }
+    .badge-active {
+      background: #065f46;
+      color: #6ee7b7;
+      padding: 4px 10px;
+      border-radius: 999px;
+      font-size: 0.78rem;
+      font-weight: 700;
+    }
+    .badge-expired {
+      background: #7f1d1d;
+      color: #fecaca;
+      padding: 4px 10px;
+      border-radius: 999px;
+      font-size: 0.78rem;
+      font-weight: 700;
+    }
+    .login-modal {
+      position: fixed;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background: #070d1e;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 2000;
+      padding: 16px;
+    }
+    .login-box {
+      background: #162447;
+      border: 1px solid #23386b;
+      border-radius: 20px;
+      max-width: 400px;
+      width: 100%;
+      padding: 36px 28px;
+      text-align: center;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- MASTER PIN LOGIN MODAL -->
+  <div class="login-modal" id="masterPinModal">
+    <div class="login-box">
+      <span style="font-size: 2.8rem;">👑</span>
+      <h2 style="font-size: 1.5rem; margin: 10px 0 6px; color: #fff;">Super Admin Portal</h2>
+      <p style="color: #94a3b8; font-size: 0.85rem; margin-bottom: 24px;">ପ୍ଲାଟଫର୍ମ ମାଲିକ ଆଡମିନ୍ PIN ଦିଅନ୍ତୁ (Default: 1234)</p>
+
+      <form onsubmit="handleSuperAdminLogin(event)">
+        <input type="password" id="inputMasterPin" maxlength="8" placeholder="Master PIN" required style="width: 100%; padding: 14px; font-size: 1.2rem; text-align: center; letter-spacing: 4px; border-radius: 12px; border: 1.5px solid #23386b; background: #0f1a35; color: #fff; margin-bottom: 16px; outline: none;">
+        <button type="submit" id="btnPinSubmit" class="btn btn-primary" style="width: 100%; padding: 14px; font-size: 1.05rem; font-weight: 700; background: #0284c7;">
+          🔓 ଅନଲକ୍ କରନ୍ତୁ
+        </button>
+      </form>
+      <div id="pinError" style="display: none; color: #f87171; font-size: 0.85rem; margin-top: 12px;"></div>
+    </div>
+  </div>
+
+  <!-- HEADER -->
+  <header class="sa-header">
+    <div class="sa-title">
+      <span style="font-size: 1.8rem;">👑</span>
+      <div>
+        <h1>Smart Print SaaS - Master Admin</h1>
+        <span style="font-size: 0.78rem; color: #94a3b8;">ସମସ୍ତ ଦୋକାନୀ ସଦସ୍ୟ, କାର୍ଯ୍ୟକ୍ଷମତା ଏବଂ ୨ ଟି ପ୍ଲାନ୍ ନିୟନ୍ତ୍ରଣ</span>
+      </div>
+    </div>
+    <div style="display: flex; gap: 10px;">
+      <a href="/" target="_blank" class="btn btn-sm" style="background: #1e293b; color: #cbd5e1;">🌐 ଲ୍ୟାଣ୍ଡିଂ ପେଜ୍</a>
+      <button onclick="handleSuperAdminLogout()" class="btn btn-sm" style="background: #dc2626; color: #fff;">🚪 ବାହାରନ୍ତୁ</button>
+    </div>
+  </header>
+
+  <!-- NAV -->
+  <nav class="sa-nav">
+    <button class="sa-tab active" onclick="switchSaTab('overview')">📊 ସଦସ୍ୟ & କାର୍ଯ୍ୟାବଳୀ (Members & Activity)</button>
+    <button class="sa-tab" onclick="switchSaTab('plans')">⚙️ ୨ ଟି ପ୍ଲାନ୍ & UPI ସେଟିଙ୍ଗ୍ (2 Plans & UPI)</button>
+  </nav>
+
+  <!-- MAIN -->
+  <main class="sa-content">
+
+    <!-- TAB 1: MEMBERS & ACTIVITY -->
+    <section id="sa-tab-overview">
+      <!-- KPI CARDS -->
+      <div class="kpi-grid">
+        <div class="kpi-card">
+          <div class="kpi-label">🏪 ମୋଟ ପଞ୍ଜୀକୃତ ଦୋକାନୀ (Total Members)</div>
+          <div class="kpi-val" id="kpiTotalShops" style="color: #38bdf8;">0</div>
+        </div>
+        <div class="kpi-card">
+          <div class="kpi-label">✅ ସକ୍ରିୟ ଦୋକାନୀ (Active & Valid)</div>
+          <div class="kpi-val" id="kpiActiveShops" style="color: #4ade80;">0</div>
+        </div>
+        <div class="kpi-card">
+          <div class="kpi-label">⚠️ ସମାପ୍ତ ଦୋକାନୀ (Expired / Due)</div>
+          <div class="kpi-val" id="kpiExpiredShops" style="color: #f87171;">0</div>
+        </div>
+        <div class="kpi-card">
+          <div class="kpi-label">🖨️ ମୋଟ ପ୍ରିଣ୍ଟ୍ ଅର୍ଡର୍ (Total Jobs)</div>
+          <div class="kpi-val" id="kpiTotalJobs" style="color: #fbbf24;">0</div>
+        </div>
+        <div class="kpi-card">
+          <div class="kpi-label">📄 ମୋଟ ପ୍ରିଣ୍ଟ୍ ହୋଇଥିବା ପେଜ୍ (Total Pages)</div>
+          <div class="kpi-val" id="kpiTotalPages" style="color: #c084fc;">0</div>
+        </div>
+      </div>
+
+      <!-- MEMBERS TABLE -->
+      <div class="sa-card">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 18px; flex-wrap: wrap; gap: 10px;">
+          <div>
+            <h3 style="margin: 0 0 4px; font-size: 1.2rem; color: #fff;">ପଞ୍ଜୀକୃତ ସଦସ୍ୟ ତାଲିକା (All Registered Shops)</h3>
+            <span style="font-size: 0.82rem; color: #94a3b8;">କେଉଁ ସଦସ୍ୟ କେତେ କାମ କରିଛନ୍ତି ଏବଂ ତାଙ୍କ ପ୍ଲାନ୍ ସମୟ ସୀମା ଏଠାରୁ ଦେଖନ୍ତୁ ଓ ବଢ଼ାନ୍ତୁ:</span>
+          </div>
+          <button class="btn btn-sm btn-primary" onclick="loadSuperAdminData()">🔄 ରିଫ୍ରେସ୍</button>
+        </div>
+
+        <div style="overflow-x: auto;">
+          <table class="sa-table">
+            <thead>
+              <tr>
+                <th>ଦୋକାନ / ମାଲିକ ନାମ</th>
+                <th>ମୋବାଇଲ୍</th>
+                <th>ଗ୍ରାହକ ଲିଙ୍କ୍ (Slug)</th>
+                <th>କାମ କେତେ କରିଛନ୍ତି (Jobs / Pages)</th>
+                <th>ପ୍ଲାନ୍ ସ୍ଥିତି</th>
+                <th>ବାକି ଦିନ</th>
+                <th>କାର୍ଯ୍ୟାନୁଷ୍ଠାନ (Extend Plan)</th>
+              </tr>
+            </thead>
+            <tbody id="membersTableBody">
+              <tr>
+                <td colspan="7" style="text-align: center; padding: 30px; color: #94a3b8;">ଲୋଡ୍ ହେଉଛି...</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- TAB 2: 2 PLANS & UPI CONFIGURATION -->
+    <section id="sa-tab-plans" style="display: none;">
+      <div class="sa-card" style="max-width: 800px; margin: 0 auto;">
+        <h3 style="color: #fff; margin-bottom: 6px;">⚙️ SaaS ୨ ଟି ପ୍ଲାନ୍ ଏବଂ ଆପଣଙ୍କ UPI ସେଟିଙ୍ଗ୍</h3>
+        <p style="color: #94a3b8; font-size: 0.85rem; margin-bottom: 24px;">
+          ଦୋକାନୀମାନେ ରିନ୍ୟୁ କରିବା ସମୟରେ ଏହି ୨ ଟି ପ୍ଲାନ୍ ଦେଖିବେ ଏବଂ ଆପଣଙ୍କ ଏହି UPI ID ରେ ଟଙ୍କା ପଠାଇବେ।
+        </p>
+
+        <form onsubmit="handleSaveSaasSettings(event)">
+          <!-- PLAN 1 -->
+          <div style="background: #111e38; border: 1.5px solid #1f2f57; border-radius: 12px; padding: 20px; margin-bottom: 20px;">
+            <div style="font-weight: 800; color: #38bdf8; font-size: 1.05rem; margin-bottom: 12px;">
+              📦 ପ୍ଲାନ୍ ୧ ସେଟିଙ୍ଗ୍ (Plan 1 - Default 6 Months / 180 Days)
+            </div>
+            <div style="display: grid; grid-template-columns: 2fr 1fr 1fr; gap: 14px;">
+              <div class="form-group">
+                <label style="color: #cbd5e1; font-size: 0.85rem;">ପ୍ଲାନ୍ ୧ ନାମ</label>
+                <input type="text" id="cfgPlan1Name" class="form-control" style="background: #0b1329; color: #fff; border-color: #23386b;" required>
+              </div>
+              <div class="form-group">
+                <label style="color: #cbd5e1; font-size: 0.85rem;">ଦିନ (Days)</label>
+                <input type="number" id="cfgPlan1Days" class="form-control" style="background: #0b1329; color: #fff; border-color: #23386b;" required>
+              </div>
+              <div class="form-group">
+                <label style="color: #cbd5e1; font-size: 0.85rem;">ଦର (Price ₹)</label>
+                <input type="number" id="cfgPlan1Price" class="form-control" style="background: #0b1329; color: #fff; border-color: #23386b;" required>
+              </div>
+            </div>
+          </div>
+
+          <!-- PLAN 2 -->
+          <div style="background: #111e38; border: 1.5px solid #1f2f57; border-radius: 12px; padding: 20px; margin-bottom: 20px;">
+            <div style="font-weight: 800; color: #4ade80; font-size: 1.05rem; margin-bottom: 12px;">
+              🌟 ପ୍ଲାନ୍ ୨ ସେଟିଙ୍ଗ୍ (Plan 2 - Default 1 Year / 365 Days)
+            </div>
+            <div style="display: grid; grid-template-columns: 2fr 1fr 1fr; gap: 14px;">
+              <div class="form-group">
+                <label style="color: #cbd5e1; font-size: 0.85rem;">ପ୍ଲାନ୍ ୨ ନାମ</label>
+                <input type="text" id="cfgPlan2Name" class="form-control" style="background: #0b1329; color: #fff; border-color: #23386b;" required>
+              </div>
+              <div class="form-group">
+                <label style="color: #cbd5e1; font-size: 0.85rem;">ଦିନ (Days)</label>
+                <input type="number" id="cfgPlan2Days" class="form-control" style="background: #0b1329; color: #fff; border-color: #23386b;" required>
+              </div>
+              <div class="form-group">
+                <label style="color: #cbd5e1; font-size: 0.85rem;">ଦର (Price ₹)</label>
+                <input type="number" id="cfgPlan2Price" class="form-control" style="background: #0b1329; color: #fff; border-color: #23386b;" required>
+              </div>
+            </div>
+          </div>
+
+          <!-- SUPER ADMIN UPI -->
+          <div style="background: #111e38; border: 1.5px solid #1f2f57; border-radius: 12px; padding: 20px; margin-bottom: 20px;">
+            <div style="font-weight: 800; color: #fbbf24; font-size: 1.05rem; margin-bottom: 12px;">
+              💳 ଆପଣଙ୍କ (Super Admin) ରିନ୍ୟୁଆଲ୍ UPI ଖାତା
+            </div>
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 12px;">
+              <div class="form-group">
+                <label style="color: #cbd5e1; font-size: 0.85rem;">ସୁପର୍ ଆଡମିନ୍ UPI ID (VPA) *</label>
+                <input type="text" id="cfgSuperAdminUpi" class="form-control" style="background: #0b1329; color: #fff; border-color: #23386b;" required>
+              </div>
+              <div class="form-group">
+                <label style="color: #cbd5e1; font-size: 0.85rem;">ବ୍ୟବସାୟ ନାମ (UPI Name)</label>
+                <input type="text" id="cfgSuperAdminUpiName" class="form-control" style="background: #0b1329; color: #fff; border-color: #23386b;" required>
+              </div>
+            </div>
+            <div class="form-group">
+              <label style="color: #cbd5e1; font-size: 0.85rem;">ନୂଆ ଦୋକାନୀଙ୍କ ପାଇଁ ପ୍ରଥମ ଫ୍ରି ଟ୍ରାଏଲ୍ ଅବଧି (ଦିନ ସଂଖ୍ୟା)</label>
+              <input type="number" id="cfgFreeTrialDays" class="form-control" style="background: #0b1329; color: #fff; border-color: #23386b; max-width: 200px;" required>
+              <span style="font-size: 0.78rem; color: #94a3b8;">ଡିଫଲ୍ଟ: ୧୮୦ ଦିନ (୬ ମାସ)</span>
+            </div>
+          </div>
+
+          <!-- CHANGE MASTER PIN -->
+          <div style="background: #111e38; border: 1.5px solid #1f2f57; border-radius: 12px; padding: 20px; margin-bottom: 24px;">
+            <div style="font-weight: 800; color: #f87171; font-size: 1.05rem; margin-bottom: 12px;">
+              🔒 Master Admin PIN ପରିବର୍ତ୍ତନ କରନ୍ତୁ (ଇଚ୍ଛାଧୀନ)
+            </div>
+            <div class="form-group">
+              <label style="color: #cbd5e1; font-size: 0.85rem;">ନୂଆ PIN (ଖାଲି ରଖିଲେ ପରିବର୍ତ୍ତନ ହେବ ନାହିଁ)</label>
+              <input type="password" id="cfgNewMasterPin" maxlength="8" class="form-control" style="background: #0b1329; color: #fff; border-color: #23386b; max-width: 250px;" placeholder="ନୂଆ PIN ଦିଅନ୍ତୁ">
+            </div>
+          </div>
+
+          <button type="submit" class="btn btn-primary" style="padding: 14px 28px; font-weight: 700; font-size: 1rem; width: 100%;">
+            💾 ସମସ୍ତ ସେଟିଙ୍ଗ୍ ସେଭ୍ କରନ୍ତୁ
+          </button>
+        </form>
+      </div>
+    </section>
+
+  </main>
+
+  <script src="/static/js/superadmin.js"></script>
+</body>
+</html>
