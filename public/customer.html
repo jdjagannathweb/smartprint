@@ -211,11 +211,36 @@
           </div>
         </div>
 
+        <!-- Print Side Selection: Single vs Double Sided -->
+        <div style="margin-bottom: 16px;">
+          <label style="font-size: 0.85rem; font-weight: 700; color: #1e293b;">ପ୍ରିଣ୍ଟ୍ ପାର୍ଶ୍ୱ (Print Side)</label>
+          <div class="mode-selector" style="grid-template-columns: 1fr 1fr; margin-top: 6px;">
+            <div class="mode-card selected" id="sideSingle" onclick="setPrintSide('single')">
+              <div style="font-size: 1.3rem;">📄</div>
+              <div style="font-weight: 700; font-size: 0.92rem; margin-top: 4px;">ଗୋଟିଏ ପାଖ (1-Side)</div>
+              <div style="font-size: 0.75rem; color: var(--text-muted); margin-top: 2px;">୧ ପୃଷ୍ଠା ପ୍ରତି କାଗଜ</div>
+            </div>
+            <div class="mode-card" id="sideDouble" onclick="setPrintSide('double')">
+              <div style="font-size: 1.3rem;">📑</div>
+              <div style="font-weight: 700; font-size: 0.92rem; margin-top: 4px;">ଉଭୟ ପାଖ (Double Sided)</div>
+              <div style="font-size: 0.75rem; color: #0284c7; font-weight: 600; margin-top: 2px;">୨ ପୃଷ୍ଠା ପ୍ରତି କାଗଜ (Duplex)</div>
+            </div>
+          </div>
+        </div>
+
         <!-- Price Breakdown -->
         <div class="price-summary">
           <div class="price-row">
             <span>ପ୍ରିଣ୍ଟ୍ ହେବାକୁ ଥିବା ପେଜ୍:</span>
             <span id="sumPrintPages">1</span>
+          </div>
+          <div class="price-row">
+            <span>ପ୍ରିଣ୍ଟ୍ ପ୍ରକାର:</span>
+            <span id="sumPrintSide" style="font-weight: 600;">ଗୋଟିଏ ପାଖ (1-Side)</span>
+          </div>
+          <div class="price-row">
+            <span>କାଗଜ ସଂଖ୍ୟା (Sheets):</span>
+            <span id="sumSheets" style="font-weight: 600; color: #059669;">1 ଟି କାଗଜ</span>
           </div>
           <div class="price-row">
             <span>କପି ସଂଖ୍ୟା:</span>
@@ -243,6 +268,24 @@
           ₹2.00
         </div>
 
+        <!-- 1-CLICK UPI INTENT BUTTON (MOBILE APP) -->
+        <div style="margin-bottom: 16px;">
+          <a href="#" id="directUpiPayLink" class="btn btn-primary" style="background: linear-gradient(135deg, #16a34a 0%, #15803d 100%); padding: 14px 22px; font-size: 1.05rem; font-weight: 800; display: inline-flex; align-items: center; justify-content: center; gap: 8px; width: 100%; box-sizing: border-box; text-decoration: none; border-radius: 12px; box-shadow: 0 4px 12px rgba(22, 163, 74, 0.25);">
+            ⚡ PhonePe / GPay / Paytm ରେ ସିଧା ପେ କରନ୍ତୁ
+          </a>
+        </div>
+
+        <!-- UPI ID COPY WIDGET -->
+        <div id="upiCopyBox" style="background: #f1f5f9; border: 1.5px solid #cbd5e1; border-radius: 12px; padding: 12px 16px; margin-bottom: 16px; display: flex; justify-content: space-between; align-items: center;">
+          <div style="text-align: left;">
+            <span style="font-size: 0.75rem; color: #64748b; font-weight: 600; display: block;">ଦୋକାନୀ UPI ID:</span>
+            <b id="textUpiVpa" style="color: #0f172a; font-size: 0.95rem; word-break: break-all;">-</b>
+          </div>
+          <button type="button" class="btn btn-sm btn-outline" onclick="copyUpiId()" style="background: #fff; padding: 6px 12px; font-size: 0.8rem; font-weight: 700; white-space: nowrap;">
+            📋 Copy
+          </button>
+        </div>
+
         <!-- Shop Custom Standee if available -->
         <div id="shopStandeeContainer" style="display: none;" class="standee-img-box">
           <div style="font-size: 0.82rem; font-weight: 700; color: #334155; margin-bottom: 6px;">ଦୋକାନର ଅଫିସିଆଲ୍ QR ଷ୍ଟାଣ୍ଡି:</div>
@@ -252,16 +295,9 @@
         <!-- Dynamic QR Code -->
         <div id="dynamicQrContainer">
           <p style="font-size: 0.85rem; color: #475569; margin-bottom: 8px;">
-            PhonePe, GPay କିମ୍ବା Paytm ରେ ସ୍କାନ୍ କରି ପେମେଣ୍ଟ୍ କରନ୍ତୁ:
+            କିମ୍ବା QR କୋଡ୍ ସ୍କାନ୍ କରି ପେମେଣ୍ଟ୍ କରନ୍ତୁ:
           </p>
           <img id="payQrImage" src="" alt="UPI QR" style="width: 200px; height: 200px; border-radius: 12px; border: 1px solid var(--border); margin-bottom: 12px;">
-        </div>
-
-        <!-- Direct UPI Pay Intent Button (Mobile) -->
-        <div style="margin-bottom: 18px;">
-          <a href="#" id="directUpiPayLink" class="btn btn-primary" style="background: #0284c7; padding: 12px 20px; font-size: 0.95rem;">
-            📱 PhonePe / GPay ରେ ସିଧା ପେ କରନ୍ତୁ
-          </a>
         </div>
 
         <!-- FRAUD PROOF CLAIM BUTTON -->
@@ -269,7 +305,7 @@
           <div style="font-weight: 700; color: #92400e; font-size: 0.92rem; margin-bottom: 6px;">
             ⚠️ ପେମେଣ୍ଟ୍ ସରିବା ପରେ ଏଠାରେ କ୍ଲିକ୍ କରନ୍ତୁ:
           </div>
-          <button class="btn btn-success" id="btnClaimPaid" onclick="claimPaymentDone()" style="padding: 14px; font-size: 1.05rem;">
+          <button class="btn btn-success" id="btnClaimPaid" onclick="claimPaymentDone()" style="padding: 14px; font-size: 1.05rem; width: 100%;">
             ✅ ମୁଁ ପେମେଣ୍ଟ୍ କରିସାରିଛି (Payment Done)
           </button>
         </div>

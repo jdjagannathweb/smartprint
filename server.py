@@ -1,4 +1,5 @@
 import os
+import sys
 import socket
 import base64
 import json
@@ -85,16 +86,24 @@ def trigger_print_execution(job_id: str):
     printer_name = shop.get("selected_printer") if shop else None
     
     database.update_job_status(job_id, {"print_status": "printing", "print_error": None})
+    
+    # If running on cloud (Render / Linux), the cloud container has no physical printer attached!
+    # Leave print_status = 'printing' so the shopkeeper's PC connector agent downloads and prints it!
+    if os.environ.get("RENDER") or sys.platform != "win32":
+        return
+    
     try:
         final_pdf_path = prepare_final_print_pdf(job_id)
         copies = int(job.get("copies", 1))
         color_mode = job.get("color_mode", "bw")
+        print_side = job.get("print_side", "single")
         
         result = print_pdf(
             file_path=final_pdf_path,
             printer_name=printer_name,
             copies=copies,
-            color_mode=color_mode
+            color_mode=color_mode,
+            print_side=print_side
         )
         if result.get("success"):
             database.update_job_status(job_id, {"print_status": "printed", "print_error": None})
@@ -268,6 +277,7 @@ async def customer_upload(shop_id: str = Form(...), file: UploadFile = File(...)
         "num_pages_to_print": job["total_pages"],
         "copies": 1,
         "color_mode": "bw",
+        "print_side": "single",
         "rate_per_page": rate,
         "total_amount": total,
         "payment_status": "pending",
@@ -289,6 +299,7 @@ async def customer_upload(shop_id: str = Form(...), file: UploadFile = File(...)
 class CustomerConfigureRequest(BaseModel):
     copies: int = 1
     color_mode: str = "bw"
+    print_side: str = "single"
     selected_pages: str = "all"
     page_range: str = None
 
@@ -307,6 +318,10 @@ def customer_configure_job(job_id: str, body: CustomerConfigureRequest):
     copies = max(1, body.copies)
     total_amount = round(num_pages * copies * rate, 2)
     
+    print_side = (body.print_side or "single").lower()
+    if print_side not in ["single", "double"]:
+        print_side = "single"
+    
     upi_uri = generate_upi_uri(
         upi_id=shop.get("upi_id") or "merchant@upi",
         merchant_name=shop.get("shop_name", "Print"),
@@ -319,6 +334,7 @@ def customer_configure_job(job_id: str, body: CustomerConfigureRequest):
         "num_pages_to_print": num_pages,
         "copies": copies,
         "color_mode": body.color_mode,
+        "print_side": print_side,
         "rate_per_page": rate,
         "total_amount": total_amount
     })
@@ -481,11 +497,39 @@ if not exist connector_config.json (
     echo {{"server_url": "{base_url}", "shop_id": "{shop['shop_id']}", "token": "{shop['connector_token']}"}} > connector_config.json
 )
 
+if not exist change_printer.bat (
+    (
+        echo @echo off
+        echo title Smart Print - Change Printer Setup
+        echo color 0b
+        echo python print_connector.py --configure
+        echo pause
+    ) > change_printer.bat
+)
+
 echo Starting Smart Print Connector...
 python print_connector.py
 pause
 """
     return PlainTextResponse(bat_content, media_type="text/plain", headers={"Content-Disposition": f"attachment; filename=start_connector_{shop['slug']}.bat"})
+
+@app.get("/api/connector/download-change-printer/{shop_id}")
+def download_change_printer_launcher(shop_id: str):
+    shop = database.get_shop_by_id(shop_id)
+    if not shop:
+        raise HTTPException(status_code=404, detail="Shop not found")
+    
+    bat_content = f"""@echo off
+title Smart Print - Change Printer Setup ({shop['shop_name']})
+color 0b
+echo ========================================================
+echo    SMART PRINT - PRINTER SELECTION & MULTI-PRINTER SETUP
+echo    Shop: {shop['shop_name']}
+echo ========================================================
+python print_connector.py --configure
+pause
+"""
+    return PlainTextResponse(bat_content, media_type="text/plain", headers={"Content-Disposition": f"attachment; filename=change_printer_{shop['slug']}.bat"})
 
 @app.get("/api/printers")
 def list_printers():

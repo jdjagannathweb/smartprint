@@ -50,6 +50,7 @@ def init_db():
         num_pages_to_print INTEGER DEFAULT 1,
         copies INTEGER DEFAULT 1,
         color_mode TEXT DEFAULT 'bw',
+        print_side TEXT DEFAULT 'single',
         rate_per_page REAL DEFAULT 2.0,
         total_amount REAL DEFAULT 2.0,
         payment_status TEXT DEFAULT 'pending',
@@ -58,6 +59,13 @@ def init_db():
         created_at TEXT NOT NULL
     )
     """)
+    
+    # Safe migration for existing databases
+    try:
+        c.execute("ALTER TABLE jobs ADD COLUMN print_side TEXT DEFAULT 'single'")
+        conn.commit()
+    except Exception:
+        pass
     
     # 3. SaaS / Platform Settings
     c.execute("""
@@ -248,13 +256,14 @@ def create_job(job_data):
     c.execute("""
     INSERT INTO jobs (
         id, shop_id, original_name, pdf_path, total_pages, num_pages_to_print,
-        copies, color_mode, rate_per_page, total_amount, payment_status,
+        copies, color_mode, print_side, rate_per_page, total_amount, payment_status,
         print_status, print_error, created_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     """, (
         job_data["id"], job_data["shop_id"], job_data["original_name"], job_data["pdf_path"],
         job_data.get("total_pages", 1), job_data.get("num_pages_to_print", 1),
         job_data.get("copies", 1), job_data.get("color_mode", "bw"),
+        job_data.get("print_side", "single"),
         job_data.get("rate_per_page", 2.0), job_data.get("total_amount", 2.0),
         job_data.get("payment_status", "pending"), job_data.get("print_status", "queued"),
         job_data.get("print_error"), job_data.get("created_at")
@@ -276,7 +285,7 @@ def update_job_status(job_id, updates):
     c = conn.cursor()
     fields = []
     values = []
-    for k in ["num_pages_to_print", "copies", "color_mode", "rate_per_page", "total_amount", "payment_status", "print_status", "print_error"]:
+    for k in ["num_pages_to_print", "copies", "color_mode", "print_side", "rate_per_page", "total_amount", "payment_status", "print_status", "print_error"]:
         if k in updates:
             fields.append(f"{k} = ?")
             values.append(updates[k])
@@ -290,7 +299,7 @@ def update_job_status(job_id, updates):
 def get_shop_jobs(shop_id, limit=50):
     conn = get_connection()
     c = conn.cursor()
-    c.execute("SELECT * FROM jobs WHERE shop_id = ? ORDER BY created_at DESC LIMIT ?", (shop_id, limit))
+    c.execute("SELECT * FROM jobs WHERE shop_id = ? ORDER BY rowid DESC, created_at DESC LIMIT ?", (shop_id, limit))
     rows = [dict(r) for r in c.fetchall()]
     conn.close()
     return rows

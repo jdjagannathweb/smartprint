@@ -82,8 +82,12 @@ async function loadShopDetails() {
     document.getElementById("standeeQrImg").src = shop.counter_qr;
     document.getElementById("standeeShopTitle").textContent = shop.shop_name;
 
-    // Connector Download Button
+    // Connector Download Buttons
     document.getElementById("btnDownloadConnector").href = `/api/connector/download-launcher/${shop.shop_id}`;
+    const btnChange = document.getElementById("btnDownloadChangePrinter");
+    if (btnChange) {
+      btnChange.href = `/api/connector/download-change-printer/${shop.shop_id}`;
+    }
 
     // Pricing
     document.getElementById("rateBwInput").value = shop.rate_bw || 2.0;
@@ -273,35 +277,51 @@ async function loadJobsTable() {
       }
 
       let actionHtml = "";
-      if (isClaimed) {
+      if (isPaid) {
         actionHtml = `
-          <div style="display: flex; gap: 6px;">
-            <button class="btn btn-sm btn-success" style="font-weight: 700;" onclick="approveJob('${j.id}')">
-              ✅ ମିଳିଲା & ପ୍ରିଣ୍ଟ୍
+          <div style="display: flex; gap: 6px; align-items: center;">
+            <button class="btn btn-sm" style="font-weight: 700; background: #0284c7; color: #fff; padding: 6px 10px; font-size: 0.8rem;" onclick="reprintJob('${j.id}')" title="ପ୍ରିଣ୍ଟର୍ କୁ ପଠାନ୍ତୁ">
+              🖨️ ${isPrinted ? 'ପୁନଃ ପ୍ରିଣ୍ଟ୍' : 'ଏବେ ପ୍ରିଣ୍ଟ୍'}
             </button>
-            <button class="btn btn-sm btn-outline" style="color: #ef4444; border-color: #ef4444;" onclick="rejectJob('${j.id}')">
-              ❌ ବାତିଲ୍
+            <button class="btn btn-sm" style="background: transparent; color: #94a3b8; border: 1px solid #cbd5e1; padding: 5px 8px; font-size: 0.75rem;" onclick="deleteJob('${j.id}')" title="ଡିଲିଟ୍">
+              🗑️
             </button>
           </div>
         `;
-      } else if (isPaid && isPrinted) {
-        actionHtml = `
-          <button class="btn btn-sm btn-outline" onclick="reprintJob('${j.id}')">
-            🖨️ ପୁନଃ ପ୍ରିଣ୍ଟ୍
-          </button>
-        `;
       } else {
-        actionHtml = `<span style="color: var(--text-muted); font-size: 0.8rem;">-</span>`;
+        actionHtml = `
+          <div style="display: flex; gap: 6px; align-items: center;">
+            <button class="btn btn-sm btn-success" style="font-weight: 700; padding: 6px 10px; font-size: 0.8rem;" onclick="approveJob('${j.id}')" title="ପେମେଣ୍ଟ୍ କନଫର୍ମ କରି ପ୍ରିଣ୍ଟ୍ କରନ୍ତୁ">
+              ✅ ${isClaimed ? 'ମିଳିଲା & ପ୍ରିଣ୍ଟ୍' : 'କନଫର୍ମ & ପ୍ରିଣ୍ଟ୍'}
+            </button>
+            <button class="btn btn-sm btn-outline" style="color: #ef4444; border-color: #ef4444; padding: 5px 8px; font-size: 0.75rem;" onclick="rejectJob('${j.id}')" title="ବାତିଲ୍">
+              ✕
+            </button>
+          </div>
+        `;
       }
 
       const rowClass = isClaimed ? "row-claimed" : "";
+
+      const isDoubleSide = (j.print_side === "double");
+      const sideBadge = isDoubleSide 
+        ? `<span style="display:inline-block; font-size:0.75rem; background:#e0e7ff; color:#3730a3; padding:2px 6px; border-radius:4px; font-weight:700; margin-top:2px;">📑 ଉଭୟ ପାଖ (2-Side)</span>`
+        : `<span style="display:inline-block; font-size:0.75rem; background:#f1f5f9; color:#475569; padding:2px 6px; border-radius:4px; margin-top:2px;">📄 ୧ ପାଖ (1-Side)</span>`;
+
+      const sheets = isDoubleSide ? Math.ceil(j.num_pages_to_print / 2) * (j.copies || 1) : j.num_pages_to_print * (j.copies || 1);
 
       return `
         <tr class="${rowClass}">
           <td style="font-size: 0.82rem; color: var(--text-muted);">${j.created_at ? j.created_at.substring(11, 16) : "-"}</td>
           <td><b>${escapeHtml(j.original_name)}</b></td>
-          <td>${j.num_pages_to_print} ପେଜ୍ (${j.copies} କପି)</td>
-          <td>${j.color_mode === "color" ? "🎨 ରଙ୍ଗୀନ" : "⬛ କଳା-ଧଳା"}</td>
+          <td>
+            ${j.num_pages_to_print} ପେଜ୍ (${j.copies} କପି)
+            <div style="font-size: 0.75rem; color: #059669; font-weight: 600;">(${sheets} ଟି କାଗଜ)</div>
+          </td>
+          <td>
+            ${j.color_mode === "color" ? "🎨 ରଙ୍ଗୀନ" : "⬛ କଳା-ଧଳା"}
+            <div>${sideBadge}</div>
+          </td>
           <td style="font-weight: 700; color: #0284c7;">₹${(j.total_amount || 0).toFixed(2)}</td>
           <td>${payBadge}</td>
           <td>${printBadge}</td>
@@ -340,12 +360,21 @@ async function rejectJob(jobId) {
 }
 
 async function reprintJob(jobId) {
-  if (!confirm("ଏହି ଫାଇଲ୍ ପୁନର୍ବାର ପ୍ରିଣ୍ଟ୍ କରିବେ କି?")) return;
   try {
     await fetch(`/api/shop/${currentShopId}/jobs/${jobId}/reprint`, { method: "POST" });
     await loadJobsTable();
   } catch (err) {
     alert("Error reprinting job: " + err.message);
+  }
+}
+
+async function deleteJob(jobId) {
+  if (!confirm("ଏହି ଅର୍ଡର୍ ତାଲିକାରୁ ହଟାଇବେ କି?")) return;
+  try {
+    await fetch(`/api/shop/${currentShopId}/jobs/${jobId}`, { method: "DELETE" });
+    await loadJobsTable();
+  } catch (err) {
+    alert("Error deleting job: " + err.message);
   }
 }
 

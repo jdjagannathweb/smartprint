@@ -1,4 +1,4 @@
-﻿import os
+import os
 import subprocess
 import json
 import shutil
@@ -48,10 +48,11 @@ def get_installed_printers():
         print(f"Error getting printers: {e}")
         return {"printers": [], "default": None, "error": str(e)}
 
-def print_pdf(file_path, printer_name=None, copies=1, color_mode="bw"):
+def print_pdf(file_path, printer_name=None, copies=1, color_mode="bw", print_side="single"):
     """
     Silently prints a PDF file using SumatraPDF on Windows.
     color_mode: 'bw' or 'color'
+    print_side: 'single' or 'double'
     """
     file_path = Path(file_path).resolve()
     if not file_path.exists():
@@ -73,6 +74,11 @@ def print_pdf(file_path, printer_name=None, copies=1, color_mode="bw"):
         settings.append("monochrome")
     elif color_mode == "color":
         settings.append("color")
+    
+    if print_side == "double":
+        settings.append("duplex")
+    else:
+        settings.append("simplex")
     
     cmd = [str(sumatra)]
     if printer_name and printer_name != "Default":

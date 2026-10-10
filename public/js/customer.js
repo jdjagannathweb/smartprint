@@ -1,6 +1,7 @@
 let currentShop = null;
 let currentJob = null;
 let selectedColorMode = "bw";
+let selectedPrintSide = "single";
 let selectedCopies = 1;
 let isCustomPages = false;
 let statusPollingInterval = null;
@@ -125,6 +126,7 @@ async function handleFileSelected(file) {
 
     selectedCopies = 1;
     selectedColorMode = "bw";
+    selectedPrintSide = "single";
     isCustomPages = false;
     document.getElementById("copiesDisplay").textContent = "1";
     document.getElementById("customPageInputBox").style.display = "none";
@@ -132,6 +134,10 @@ async function handleFileSelected(file) {
     document.getElementById("btnCustomPages").className = "btn btn-sm btn-outline";
     document.getElementById("modeBw").className = "mode-card selected";
     document.getElementById("modeColor").className = "mode-card";
+    const sideS = document.getElementById("sideSingle");
+    if (sideS) sideS.className = "mode-card selected";
+    const sideD = document.getElementById("sideDouble");
+    if (sideD) sideD.className = "mode-card";
 
     calculateTotal();
 
@@ -164,6 +170,15 @@ function setColorMode(mode) {
   selectedColorMode = mode;
   document.getElementById("modeBw").className = mode === "bw" ? "mode-card selected" : "mode-card";
   document.getElementById("modeColor").className = mode === "color" ? "mode-card selected" : "mode-card";
+  calculateTotal();
+}
+
+function setPrintSide(side) {
+  selectedPrintSide = side;
+  const sideS = document.getElementById("sideSingle");
+  if (sideS) sideS.className = side === "single" ? "mode-card selected" : "mode-card";
+  const sideD = document.getElementById("sideDouble");
+  if (sideD) sideD.className = side === "double" ? "mode-card selected" : "mode-card";
   calculateTotal();
 }
 
@@ -218,7 +233,18 @@ function calculateTotal() {
   const rate = selectedColorMode === "color" ? parseFloat(currentShop.rate_color) : parseFloat(currentShop.rate_bw);
   const total = numPages * selectedCopies * rate;
 
+  const sheetsPerCopy = selectedPrintSide === "double" ? Math.ceil(numPages / 2) : numPages;
+  const totalSheets = sheetsPerCopy * selectedCopies;
+
   document.getElementById("sumPrintPages").textContent = `${numPages} ପେଜ୍`;
+  const printSideEl = document.getElementById("sumPrintSide");
+  if (printSideEl) {
+    printSideEl.textContent = selectedPrintSide === "double" ? "ଉଭୟ ପାଖ (Double Sided)" : "ଗୋଟିଏ ପାଖ (1-Side)";
+  }
+  const sheetsEl = document.getElementById("sumSheets");
+  if (sheetsEl) {
+    sheetsEl.textContent = `${totalSheets} ଟି କାଗଜ ${selectedPrintSide === "double" ? "(ଉଭୟ ପାଖ)" : ""}`;
+  }
   document.getElementById("sumCopies").textContent = `${selectedCopies} କପି`;
   document.getElementById("sumRate").textContent = `₹${rate.toFixed(2)}`;
   document.getElementById("sumTotal").textContent = `₹${total.toFixed(2)}`;
@@ -237,6 +263,7 @@ async function proceedToPayment() {
       body: JSON.stringify({
         color_mode: selectedColorMode,
         copies: selectedCopies,
+        print_side: selectedPrintSide,
         selected_pages: rangeStr || "all",
         page_range: rangeStr || "all"
       })
@@ -265,9 +292,19 @@ async function proceedToPayment() {
       document.getElementById("shopStandeeContainer").style.display = "none";
     }
 
+    const upiVpa = currentJob.upi_id || currentShop?.upi_id || "";
+    const vpaBox = document.getElementById("upiCopyBox");
+    const vpaText = document.getElementById("textUpiVpa");
+    if (upiVpa) {
+      vpaText.textContent = upiVpa;
+      vpaBox.style.display = "flex";
+    } else {
+      vpaBox.style.display = "none";
+    }
+
     if (currentJob.upi_uri) {
       document.getElementById("directUpiPayLink").href = currentJob.upi_uri;
-      document.getElementById("directUpiPayLink").style.display = "inline-block";
+      document.getElementById("directUpiPayLink").style.display = "inline-flex";
     } else {
       document.getElementById("directUpiPayLink").style.display = "none";
     }
@@ -276,6 +313,16 @@ async function proceedToPayment() {
   } catch (err) {
     alert("ଭୁଲ୍: " + err.message);
   }
+}
+
+function copyUpiId() {
+  const upi = currentJob?.upi_id || currentShop?.upi_id || "";
+  if (!upi) return;
+  navigator.clipboard.writeText(upi).then(() => {
+    alert(`✅ UPI ID (${upi}) କପି ହୋଇଗଲା!\nଆପଣଙ୍କ PhonePe କିମ୍ବା Google Pay ରେ Paste କରି ପେମେଣ୍ଟ୍ କରନ୍ତୁ।`);
+  }).catch(() => {
+    prompt("ଏହି UPI ID କପି କରନ୍ତୁ:", upi);
+  });
 }
 
 async function claimPaymentDone() {
