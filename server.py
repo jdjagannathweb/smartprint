@@ -14,6 +14,7 @@ from pydantic import BaseModel
 import database
 from services.printer_service import get_installed_printers, print_pdf, generate_test_page_pdf
 from services.payment_service import generate_upi_uri, generate_qr_base64, generate_counter_qr
+from services.tunnel_service import start_tunnel_thread, get_public_url
 from services.document_service import process_uploaded_file, parse_page_range, prepare_final_print_pdf, delete_job_files, cleanup_old_uploads
 import threading
 import time
@@ -33,7 +34,8 @@ def start_file_cleaner_thread():
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     database.init_db()
-    start_tunnel_thread()
+    if not os.environ.get("RENDER"):
+        start_tunnel_thread()
     start_file_cleaner_thread()
     yield
 
@@ -66,6 +68,9 @@ def get_local_ip():
     return ip
 
 def get_base_url():
+    render_url = os.environ.get("RENDER_EXTERNAL_URL")
+    if render_url:
+        return render_url.rstrip("/")
     pub = get_public_url()
     if pub:
         return pub
@@ -439,6 +444,10 @@ def connector_confirm_printed(job_id: str, body: ConnectorConfirm):
         delete_job_files(job_id)
     return {"success": True}
 
+@app.get("/api/connector/script")
+def download_connector_python_script():
+    return FileResponse(BASE_DIR / "print_connector.py", media_type="text/plain", filename="print_connector.py")
+
 @app.get("/api/connector/download-launcher/{shop_id}")
 def download_connector_launcher(shop_id: str):
     shop = database.get_shop_by_id(shop_id)
@@ -454,17 +463,24 @@ echo    SMART PRINT CONNECTOR (OPTION 2 AGENT)
 echo    Shop: {shop['shop_name']} ({shop['shop_id']})
 echo ========================================================
 echo.
-echo Checking Python and Starting Connector Agent...
-python -c "import urllib.request; print('Python Ready!')" || (
-    echo Python not found! Please install Python from python.org
+echo Checking Python environment...
+python --version >nul 2>&1 || (
+    echo [ERROR] Python is not installed or not in PATH!
+    echo Please install Python from https://www.python.org/downloads/
     pause
     exit /b
+)
+
+if not exist print_connector.py (
+    echo Downloading connector agent from cloud server...
+    powershell -Command "try {{ [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12; (New-Object System.Net.WebClient).DownloadFile('{base_url}/api/connector/script', 'print_connector.py'); echo 'Ready!' }} catch {{ echo 'Download error: ' + $_.Exception.Message }}"
 )
 
 if not exist connector_config.json (
     echo {{"server_url": "{base_url}", "shop_id": "{shop['shop_id']}", "token": "{shop['connector_token']}"}} > connector_config.json
 )
 
+echo Starting Smart Print Connector...
 python print_connector.py
 pause
 """
@@ -619,11 +635,12 @@ def superadmin_page():
 if __name__ == "__main__":
     import uvicorn
     ip = get_local_ip()
+    port = int(os.environ.get("PORT", 8000))
     print("=" * 60)
     print(f"  SMART PRINT SAAS PLATFORM STARTED")
-    print(f"  Landing & Plans : http://{ip}:8000")
-    print(f"  Shop Register   : http://{ip}:8000/register")
-    print(f"  Shop Dashboard  : http://{ip}:8000/dashboard")
-    print(f"  Master Admin    : http://{ip}:8000/superadmin")
+    print(f"  Landing & Plans : http://{ip}:{port}")
+    print(f"  Shop Register   : http://{ip}:{port}/register")
+    print(f"  Shop Dashboard  : http://{ip}:{port}/dashboard")
+    print(f"  Master Admin    : http://{ip}:{port}/superadmin")
     print("=" * 60)
-    uvicorn.run("server:app", host="0.0.0.0", port=8000, reload=False)
+    uvicorn.run("server:app", host="0.0.0.0", port=port, reload=False)
