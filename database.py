@@ -1,4 +1,4 @@
-﻿import sqlite3
+import sqlite3
 import uuid
 import json
 from datetime import datetime, timedelta
@@ -108,17 +108,42 @@ def register_shop(shop_name, owner_name, mobile, password, slug=None, upi_id="")
     conn = get_connection()
     c = conn.cursor()
     
-    # Clean slug
+    # Clean mobile number: strip country code and non-digits
+    clean_mob = "".join(ch for ch in str(mobile) if ch.isdigit())
+    if len(clean_mob) > 10 and clean_mob.startswith("91"):
+        clean_mob = clean_mob[2:]
+    
+    if len(clean_mob) != 10:
+        conn.close()
+        return {"error": "ଦୟାକରି ସଠିକ୍ ୧୦-ଅଙ୍କ ମୋବାଇଲ୍ ନମ୍ବର ଦିଅନ୍ତୁ (10-digit mobile number required)."}
+    
+    mobile = clean_mob
+
+    # Check if mobile already exists
+    c.execute("SELECT id, shop_name FROM shops WHERE mobile = ?", (mobile,))
+    existing = c.fetchone()
+    if existing:
+        conn.close()
+        return {"error": f"ଏହି ମୋବାଇଲ୍ ନମ୍ବର ({mobile}) ପୂର୍ବରୁ ପଞ୍ଜିକୃତ ହୋଇସାରିଛି। ଦୟାକରି ଲଗ୍ଇନ୍ କରନ୍ତୁ।"}
+
+    # Clean slug (strictly ASCII for clean URLs)
+    def to_ascii_slug(text):
+        return "".join(ch for ch in text.lower() if ('a' <= ch <= 'z') or ('0' <= ch <= '9') or ch in "-_ ")
+
+    if not slug or not slug.strip():
+        clean_name = to_ascii_slug(shop_name).strip().replace(" ", "-")
+        slug = clean_name if clean_name else f"shop-{mobile[-4:]}"
+    slug = "".join(ch for ch in slug.lower() if ('a' <= ch <= 'z') or ('0' <= ch <= '9') or ch in "-_")
     if not slug:
-        slug = shop_name.lower().replace(" ", "-")
-    slug = "".join(ch for ch in slug if ch.isalnum() or ch in "-_").lower()
-    if not slug:
-        slug = "shop-" + mobile[-4:]
+        slug = f"shop-{mobile[-4:]}"
         
-    # Check if slug exists, append random if needed
-    c.execute("SELECT id FROM shops WHERE slug = ?", (slug,))
-    if c.fetchone():
-        slug = f"{slug}-{uuid.uuid4().hex[:4]}"
+    # Ensure unique slug
+    base_slug = slug
+    while True:
+        c.execute("SELECT id FROM shops WHERE slug = ?", (slug,))
+        if not c.fetchone():
+            break
+        slug = f"{base_slug}-{uuid.uuid4().hex[:4]}"
         
     shop_id = "SHP-" + uuid.uuid4().hex[:6].upper()
     connector_token = "TOK-" + uuid.uuid4().hex[:12].upper()
@@ -143,7 +168,7 @@ def register_shop(shop_name, owner_name, mobile, password, slug=None, upi_id="")
         ))
         conn.commit()
         return get_shop_by_id(shop_id)
-    except sqlite3.IntegrityError as e:
+    except sqlite3.IntegrityError:
         return {"error": "ଏହି ମୋବାଇଲ୍ ନମ୍ବର କିମ୍ବା ୟୁଜରନେମ୍ ପୂର୍ବରୁ ପଞ୍ଜିକୃତ ହୋଇସାରିଛି।"}
     finally:
         conn.close()

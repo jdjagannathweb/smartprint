@@ -121,15 +121,15 @@
         </div>
 
         <div class="form-group">
-          <label for="slug">🔗 ଦୋକାନର ୱେବ୍ ଲିଙ୍କ୍ କୋଡ୍ (Shop URL Slug) *</label>
-          <input type="text" id="slug" placeholder="ଉଦାହରଣ: tarini-print" required pattern="[a-zA-Z0-9\-_]+">
+          <label for="slug">🔗 ଦୋକାନର ୱେବ୍ ଲିଙ୍କ୍ କୋଡ୍ (Shop URL Slug) <span style="font-weight: 400; color: #64748b;">(ଇଚ୍ଛାଧୀନ / Optional)</span></label>
+          <input type="text" id="slug" placeholder="ଉଦାହରଣ: tarini-print (ଖାଲି ରଖିଲେ ଆପେ ଆପେ ତିଆରି ହେବ)">
           <div class="form-hint" id="slugPreview">ଆପଣଙ୍କ ଗ୍ରାହକ ଲିଙ୍କ୍ ହେବ: <b id="slugUrl">.../s/your-shop</b></div>
         </div>
 
         <div class="form-group">
-          <label for="upiId">💳 ଆପଣଙ୍କ UPI ID (GPay / PhonePe / Paytm) *</label>
-          <input type="text" id="upiId" placeholder="ଉଦାହରଣ: 9876543210@ybl କିମ୍ବା yourname@okaxis" required>
-          <div class="form-hint">ଗ୍ରାହକଙ୍କ ପ୍ରିଣ୍ଟ୍ ଟଙ୍କା ସିଧା ଆପଣଙ୍କ ଏହି ବ୍ୟାଙ୍କ ଖାତାକୁ ଯିବ।</div>
+          <label for="upiId">💳 ଆପଣଙ୍କ UPI ID (GPay / PhonePe / Paytm) <span style="font-weight: 400; color: #64748b;">(ଇଚ୍ଛାଧୀନ / Optional)</span></label>
+          <input type="text" id="upiId" placeholder="ଉଦାହରଣ: 9876543210@ybl (ପରେ ମଧ୍ୟ ଦେଇପାରିବେ)">
+          <div class="form-hint">ଗ୍ରାହକଙ୍କ ପ୍ରିଣ୍ଟ୍ ଟଙ୍କା ସିଧା ଆପଣଙ୍କ ଏହି ବ୍ୟାଙ୍କ ଖାତାକୁ ଯିବ (ପରେ ଡ୍ୟାସବୋର୍ଡରେ ମଧ୍ୟ ବଦଳାଇ ପାରିବେ)।</div>
         </div>
 
         <button type="submit" id="btnSubmit" class="btn btn-primary" style="width: 100%; padding: 14px; font-size: 1.1rem; font-weight: 700; margin-top: 10px;">
@@ -175,12 +175,22 @@
       const errBox = document.getElementById("errorAlert");
       errBox.style.display = "none";
 
+      let rawMobile = document.getElementById("mobile").value.replace(/[^0-9]/g, '');
+      if (rawMobile.length > 10 && rawMobile.startsWith("91")) {
+        rawMobile = rawMobile.substring(2);
+      }
+      if (rawMobile.length !== 10) {
+        errBox.innerHTML = "⚠️ ଦୟାକରି ସଠିକ୍ ୧୦-ଅଙ୍କ ବିଶିଷ୍ଟ ମୋବାଇଲ୍ ନମ୍ବର ଦିଅନ୍ତୁ।";
+        errBox.style.display = "block";
+        return;
+      }
+
       const payload = {
         shop_name: document.getElementById("shopName").value.trim(),
         owner_name: document.getElementById("ownerName").value.trim(),
-        mobile: document.getElementById("mobile").value.trim(),
+        mobile: rawMobile,
         password: document.getElementById("password").value.trim(),
-        slug: document.getElementById("slug").value.trim(),
+        slug: document.getElementById("slug").value.trim() || null,
         upi_id: document.getElementById("upiId").value.trim()
       };
 
@@ -195,7 +205,11 @@
         });
         const data = await res.json();
         if (!res.ok) {
-          throw new Error(data.detail || data.error || "ରେଜିଷ୍ଟ୍ରେସନ୍ ବିଫଳ ହେଲା!");
+          let msg = data.detail || data.error || "ରେଜିଷ୍ଟ୍ରେସନ୍ ବିଫଳ ହେଲା!";
+          if (msg.includes("ପୂର୍ବରୁ ପଞ୍ଜିକୃତ")) {
+            msg += `<br><a href="/login" style="color: #2563eb; font-weight: 800; text-decoration: underline; display: inline-block; margin-top: 6px;">👉 ଏଠାରେ ଲଗ୍ଇନ୍ କରନ୍ତୁ (Login Here)</a>`;
+          }
+          throw new Error(msg);
         }
 
         // Store shop session
@@ -207,7 +221,7 @@
           window.location.href = "/dashboard";
         }, 800);
       } catch (err) {
-        errBox.textContent = err.message;
+        errBox.innerHTML = err.message;
         errBox.style.display = "block";
         btn.disabled = false;
         btn.textContent = "🚀 ଏବେ ହିଁ ମାଗଣାରେ ଆରମ୍ଭ କରନ୍ତୁ";
