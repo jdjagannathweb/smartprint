@@ -1,0 +1,404 @@
+<!DOCTYPE html>
+<html lang="or">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ଦୋକାନୀ କଣ୍ଟ୍ରୋଲ୍ ପ୍ୟାନେଲ୍ - Smart Print Cloud</title>
+  <link rel="stylesheet" href="/static/css/admin.css">
+  <style>
+    .row-claimed {
+      background-color: #fefce8 !important;
+      border-left: 4px solid #eab308;
+    }
+    .pulse-badge {
+      animation: pulse-border 1.5s infinite;
+    }
+    @keyframes pulse-border {
+      0% { box-shadow: 0 0 0 0 rgba(234, 179, 8, 0.7); }
+      70% { box-shadow: 0 0 0 6px rgba(234, 179, 8, 0); }
+      100% { box-shadow: 0 0 0 0 rgba(234, 179, 8, 0); }
+    }
+    .sub-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 6px 14px;
+      border-radius: 999px;
+      font-weight: 700;
+      font-size: 0.85rem;
+      cursor: pointer;
+      text-decoration: none;
+      transition: all 0.2s;
+    }
+    .sub-pill-active {
+      background: #065f46;
+      color: #6ee7b7;
+      border: 1px solid #059669;
+    }
+    .sub-pill-warning {
+      background: #78350f;
+      color: #fde68a;
+      border: 1px solid #d97706;
+    }
+    .sub-pill-expired {
+      background: #7f1d1d;
+      color: #fecaca;
+      border: 1px solid #dc2626;
+    }
+    /* Modal Styles */
+    .modal-overlay {
+      position: fixed;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background: rgba(15, 23, 42, 0.75);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      z-index: 1000;
+      padding: 16px;
+    }
+    .modal-card {
+      background: #fff;
+      border-radius: 20px;
+      max-width: 600px;
+      width: 100%;
+      padding: 30px;
+      box-shadow: 0 20px 40px rgba(0,0,0,0.3);
+      max-height: 90vh;
+      overflow-y: auto;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- ADMIN HEADER -->
+  <header class="admin-header">
+    <div class="admin-title">
+      <span style="font-size: 1.6rem;">🖨️</span>
+      <div>
+        <h1 id="topShopName">ଦୋକାନ ଲୋଡ୍ ହେଉଛି...</h1>
+        <div style="display: flex; align-items: center; gap: 8px; margin-top: 4px; flex-wrap: wrap;">
+          <span style="font-size: 0.8rem; opacity: 0.85;" id="topOwnerName">ମାଲିକ କଣ୍ଟ୍ରୋଲ୍</span>
+          <span class="sub-pill sub-pill-active" id="validityPill" onclick="openRenewalModal()">
+            🌟 ବାକି: ... ଦିନ (ରିନ୍ୟୁ କରନ୍ତୁ)
+          </span>
+        </div>
+      </div>
+    </div>
+    <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
+      <a href="#" id="customerPortalLink" target="_blank" class="btn btn-sm btn-primary" style="background: #0284c7;">
+        🌐 ଗ୍ରାହକ ପୋର୍ଟାଲ୍ ଦେଖନ୍ତୁ
+      </a>
+      <button onclick="handleLogout()" class="btn btn-sm" style="background: #ef4444; color: #fff;">
+        🚪 ଲଗ୍ ଆଉଟ୍
+      </button>
+    </div>
+  </header>
+
+  <!-- NAV TABS -->
+  <nav class="admin-nav">
+    <button class="nav-tab active" onclick="switchTab('orders')">📋 ଲାଇଭ୍ ପ୍ରିଣ୍ଟ୍ ତାଲିକା</button>
+    <button class="nav-tab" onclick="switchTab('printer')">⚙️ ପ୍ରିଣ୍ଟର୍ & Connector</button>
+    <button class="nav-tab" onclick="switchTab('pricing')">💰 ଦର & ପ୍ରାଇସିଂ</button>
+    <button class="nav-tab" onclick="switchTab('payment')">💳 ପେମେଣ୍ଟ୍ & QR ସେଟିଙ୍ଗ୍</button>
+    <button class="nav-tab" onclick="switchTab('standee')">🪧 କାଉଣ୍ଟର୍ QR ପୋଷ୍ଟର୍</button>
+    <button class="nav-tab" onclick="switchTab('subscription')">🌟 ଆପଣଙ୍କ ପ୍ଲାନ୍ (୨ Plans)</button>
+  </nav>
+
+  <main class="admin-content">
+
+    <!-- EXPIRY WARNING BANNER (Hidden by default) -->
+    <div id="expiryWarningBanner" style="display: none; background: #fffbeb; border-left: 5px solid #f59e0b; padding: 16px 20px; border-radius: 12px; margin-bottom: 24px;">
+      <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px;">
+        <div>
+          <h4 style="color: #92400e; margin: 0 0 4px; font-size: 1.05rem;">⚠️ ଆପଣଙ୍କ ସବସ୍କ୍ରିପସନ୍ ଶେଷ ହେବାକୁ ଯାଉଛି!</h4>
+          <span style="font-size: 0.88rem; color: #b45309;" id="expiryBannerText">ଦୋକାନ ସେବା ନିରନ୍ତର ଚାଲୁ ରଖିବା ପାଇଁ ଏବେ ହିଁ ରିନ୍ୟୁ କରନ୍ତୁ।</span>
+        </div>
+        <button onclick="openRenewalModal()" class="btn btn-sm" style="background: #f59e0b; color: #fff; font-weight: 700;">
+          💳 ଏବେ ରିନ୍ୟୁ କରନ୍ତୁ (View 2 Plans)
+        </button>
+      </div>
+    </div>
+
+    <!-- TAB 1: ORDERS & QUEUE -->
+    <section id="tab-orders">
+      <div class="stats-grid">
+        <div class="stat-card" style="border-top: 4px solid var(--success);">
+          <div class="stat-label">ଆଜିର ମୋଟ ରୋଜଗାର</div>
+          <div class="stat-value" id="statRevenue" style="color: var(--success);">₹0.00</div>
+        </div>
+        <div class="stat-card" style="border-top: 4px solid #eab308; background: #fefce8;">
+          <div class="stat-label" style="color: #854d0e;">🔔 ଯାଞ୍ଚ ଅପେକ୍ଷାରେ (Claimed)</div>
+          <div class="stat-value" id="statClaimed" style="color: #854d0e;">0</div>
+        </div>
+        <div class="stat-card" style="border-top: 4px solid var(--primary);">
+          <div class="stat-label">ସଫଳ ପ୍ରିଣ୍ଟ୍</div>
+          <div class="stat-value" id="statPrinted" style="color: var(--primary);">0</div>
+        </div>
+        <div class="stat-card" style="border-top: 4px solid var(--border);">
+          <div class="stat-label">ମୋଟ ଅର୍ଡର୍</div>
+          <div class="stat-value" id="statTotalJobs">0</div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; flex-wrap: wrap; gap: 8px;">
+          <div>
+            <h3 style="margin-bottom: 2px;">ସାମ୍ପ୍ରତିକ ଅର୍ଡର୍ ଏବଂ ପ୍ରିଣ୍ଟ୍ ତାଲିକା</h3>
+            <span style="font-size: 0.8rem; color: var(--text-muted);">ଗ୍ରାହକ ପେମେଣ୍ଟ୍ କଲେ ଏଠାରେ ଯାଞ୍ଚ କରି କନଫର୍ମ କରନ୍ତୁ, ତାପରେ ହିଁ ପ୍ରିଣ୍ଟ୍ ବାହାରିବ।</span>
+          </div>
+          <button class="btn btn-sm btn-primary" onclick="loadJobsTable()">🔄 ରିଫ୍ରେସ୍</button>
+        </div>
+
+        <div class="table-responsive">
+          <table class="data-table" id="jobsTable">
+            <thead>
+              <tr>
+                <th>ସମୟ</th>
+                <th>ଫାଇଲ୍ ନାମ</th>
+                <th>ପେଜ୍ & କପି</th>
+                <th>ମୋଡ୍</th>
+                <th>ମୋଟ ଟଙ୍କା</th>
+                <th>ପେମେଣ୍ଟ୍ ସ୍ଥିତି</th>
+                <th>ପ୍ରିଣ୍ଟ୍ ସ୍ଥିତି</th>
+                <th>ଆକ୍ସନ୍</th>
+              </tr>
+            </thead>
+            <tbody id="jobsTableBody">
+              <tr>
+                <td colspan="8" style="text-align: center; color: var(--text-muted); padding: 30px;">
+                  ଲୋଡ୍ ହେଉଛି...
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- TAB 2: PRINTER SETUP & CONNECTOR -->
+    <section id="tab-printer" style="display: none;">
+      <!-- OPTION 2 CONNECTOR HIGHLIGHT CARD -->
+      <div class="card" style="border: 2px solid #2563eb; background: linear-gradient(135deg, #f0f7ff 0%, #ffffff 100%); margin-bottom: 24px;">
+        <div style="display: flex; align-items: flex-start; gap: 16px; flex-wrap: wrap;">
+          <span style="font-size: 2.5rem;">🚀</span>
+          <div style="flex: 1;">
+            <h3 style="color: #1e3a8a; margin: 0 0 6px;">ଅପ୍ସନ୍ ୨: ସ୍ୱୟଂଚାଳିତ ପ୍ରିଣ୍ଟ୍ କନେକ୍ଟର୍ (1-Click Auto Print)</h3>
+            <p style="color: #334155; font-size: 0.92rem; margin: 0 0 14px; line-height: 1.6;">
+              ଆପଣଙ୍କ କମ୍ପ୍ୟୁଟରରେ କୌଣସି ବ୍ରାଉଜର୍ ପପ୍-ଅପ୍ ବିନା ସାଇଲେଣ୍ଟ୍ ପ୍ରିଣ୍ଟ୍ ପାଇଁ ଏହି କନେକ୍ଟର୍ ଟି ଡାଉନଲୋଡ୍ କରି ଚଲାନ୍ତୁ। 
+              ଆପଣ ଡ୍ୟାସବୋର୍ଡରେ ଅନୁମୋଦନ ଦେବା କ୍ଷଣି ଏହା ଆପଣଙ୍କ ଫିଜିକାଲ୍ ପ୍ରିଣ୍ଟର୍ ରୁ କାଗଜ ବାହାର କରିଦେବ!
+            </p>
+            <div style="display: flex; gap: 12px; flex-wrap: wrap; align-items: center;">
+              <a href="#" id="btnDownloadConnector" class="btn btn-primary" style="padding: 12px 22px; font-weight: 700; font-size: 0.95rem; text-decoration: none;">
+                📥 ଡାଉନଲୋଡ୍ କରନ୍ତୁ Connector (.bat)
+              </a>
+              <span style="font-size: 0.82rem; color: #64748b;">(କେବଳ ଏହି ଫାଇଲ୍ ଟି କ୍ଲିକ୍ କରି ଚାଲୁ ରଖନ୍ତୁ)</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <h3>ଲୋକାଲ୍ ପ୍ରିଣ୍ଟର୍ ଚୟନ</h3>
+        <p style="color: var(--text-muted); font-size: 0.85rem; margin-bottom: 16px;">
+          ଯଦି ସର୍ଭର ଏହି କମ୍ପ୍ୟୁଟରରେ ଚାଲୁଅଛି, ଆପଣ ସିଧା ଏହି ପ୍ରିଣ୍ଟର୍ କୁ ବ୍ୟବହାର କରିପାରିବେ:
+        </p>
+
+        <div class="form-group">
+          <label>ଡିଫଲ୍ଟ ପ୍ରିଣ୍ଟର୍ ବାଛନ୍ତୁ</label>
+          <div style="display: flex; gap: 10px; max-width: 500px;">
+            <select id="printerSelect" class="form-control" style="flex: 1;">
+              <option value="">(ସିଷ୍ଟମ୍ ଡିଫଲ୍ଟ ପ୍ରିଣ୍ଟର୍)</option>
+            </select>
+            <button class="btn btn-primary" onclick="savePrinterChoice()">💾 ସେଭ୍ କରନ୍ତୁ</button>
+          </div>
+        </div>
+
+        <div style="margin-top: 24px; padding-top: 20px; border-top: 1px solid var(--border);">
+          <h4>ପ୍ରିଣ୍ଟର୍ ଟେଷ୍ଟ୍ କରନ୍ତୁ</h4>
+          <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 12px;">ପ୍ରିଣ୍ଟର୍ ଠିକ୍ ଭାବେ କାମ କରୁଛି କି ନାହିଁ ଜାଣିବା ପାଇଁ ଏକ ପରୀକ୍ଷାମୂଳକ ପେଜ୍ ପ୍ରିଣ୍ଟ୍ କରନ୍ତୁ:</p>
+          <button class="btn btn-outline" onclick="triggerTestPrint()">🖨️ ଟେଷ୍ଟ୍ ପେଜ୍ ପ୍ରିଣ୍ଟ୍ କରନ୍ତୁ</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- TAB 3: PRICING -->
+    <section id="tab-pricing" style="display: none;">
+      <div class="card" style="max-width: 550px;">
+        <h3>ଦର ଏବଂ ପ୍ରାଇସିଂ ନିର୍ଦ୍ଧାରଣ</h3>
+        <p style="color: var(--text-muted); font-size: 0.85rem; margin-bottom: 20px;">
+          ଆପଣଙ୍କ ଦୋକାନର କଳା-ଧଳା ଓ ରଙ୍ଗୀନ ପ୍ରିଣ୍ଟ୍ ପାଇଁ ପ୍ରତି ପେଜ୍ ଦର ଏଠାରେ ସେଟ୍ କରନ୍ତୁ:
+        </p>
+
+        <div class="form-group">
+          <label>କଳା-ଧଳା (Black & White) ଦର (ପ୍ରତି ପେଜ୍)</label>
+          <div style="display: flex; align-items: center; gap: 6px;">
+            <span style="font-weight: 700; font-size: 1.1rem;">₹</span>
+            <input type="number" id="rateBwInput" class="form-control" step="0.5" min="0.5" value="2.0">
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label>ରଙ୍ଗୀନ (Color) ଦର (ପ୍ରତି ପେଜ୍)</label>
+          <div style="display: flex; align-items: center; gap: 6px;">
+            <span style="font-weight: 700; font-size: 1.1rem;">₹</span>
+            <input type="number" id="rateColorInput" class="form-control" step="0.5" min="1.0" value="10.0">
+          </div>
+        </div>
+
+        <button class="btn btn-primary" onclick="savePricing()">💾 ଦର ସେଭ୍ କରନ୍ତୁ</button>
+      </div>
+    </section>
+
+    <!-- TAB 4: PAYMENT SETTINGS -->
+    <section id="tab-payment" style="display: none;">
+      <div class="card" style="max-width: 600px;">
+        <h3>ଦୋକାନୀ UPI ଏବଂ QR ସେଟିଙ୍ଗ୍</h3>
+        <p style="color: var(--text-muted); font-size: 0.85rem; margin-bottom: 20px;">
+          ଗ୍ରାହକ ଅର୍ଡର୍ କଲେ ଟଙ୍କା ସିଧା ଆପଣଙ୍କ ବ୍ୟାଙ୍କ ଖାତାରେ ଜମା ହେବ:
+        </p>
+
+        <div class="form-group">
+          <label>ଆପଣଙ୍କ UPI ID (VPA) *</label>
+          <input type="text" id="upiIdInput" class="form-control" placeholder="ଉଦାହରଣ: 9876543210@ybl">
+          <span style="font-size: 0.75rem; color: var(--text-muted);">PhonePe, Google Pay, Paytm କିମ୍ବା BHIM UPI ID ଦିଅନ୍ତୁ।</span>
+        </div>
+
+        <button class="btn btn-primary" onclick="saveUpiId()" style="margin-bottom: 24px;">💾 UPI ID ସେଭ୍ କରନ୍ତୁ</button>
+
+        <div style="padding-top: 20px; border-top: 1px solid var(--border);">
+          <h4>କାଉଣ୍ଟର୍ UPI ଷ୍ଟାଣ୍ଡି ଫଟୋ (Custom Standee QR Photo)</h4>
+          <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 12px;">
+            ଯଦି ଆପଣଙ୍କ ଦୋକାନ କାଉଣ୍ଟରରେ ଥିବା PhonePe / GPay ଷ୍ଟାଣ୍ଡି ର ଫଟୋ ଦେବାକୁ ଚାହାନ୍ତି, ଏଠାରେ ଅପଲୋଡ୍ କରନ୍ତୁ:
+          </p>
+
+          <div id="customQrPreviewBox" style="margin-bottom: 12px; display: none;">
+            <img id="customQrPreview" src="" alt="Standee Preview" style="max-width: 180px; border-radius: 10px; border: 1px solid var(--border);">
+          </div>
+
+          <input type="file" id="standeeFileInput" accept="image/*" class="form-control" style="margin-bottom: 10px;">
+          <button class="btn btn-outline" onclick="uploadStandeeImage()">📤 ଫଟୋ ଅପଲୋଡ୍ କରନ୍ତୁ</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- TAB 5: COUNTER QR POSTER -->
+    <section id="tab-standee" style="display: none;">
+      <div class="card" style="text-align: center; max-width: 500px; margin: 0 auto;">
+        <h3>ଗ୍ରାହକଙ୍କ ପାଇଁ କାଉଣ୍ଟର୍ QR ପୋଷ୍ଟର୍</h3>
+        <p style="color: var(--text-muted); font-size: 0.85rem; margin-bottom: 20px;">
+          ଏହି ପୋଷ୍ଟର୍ ଟି ପ୍ରିଣ୍ଟ୍ କରି ଦୋକାନ କାଉଣ୍ଟରରେ ଲଗାନ୍ତୁ। ଗ୍ରାହକ ମୋବାଇଲ୍ ରୁ ସ୍କାନ୍ କରି ଫାଇଲ୍ ପ୍ରିଣ୍ଟ୍ କରିପାରିବେ:
+        </p>
+
+        <div id="standeePrintArea" style="background: #fff; padding: 24px; border: 2px dashed #0284c7; border-radius: 16px; margin-bottom: 20px;">
+          <h2 style="color: #0284c7; margin-bottom: 4px;" id="standeeShopTitle">ସ୍ମାର୍ଟ ପ୍ରିଣ୍ଟ୍ & ଜେରକ୍ସ</h2>
+          <p style="font-size: 0.9rem; color: #475569; margin-bottom: 16px;">📲 ସ୍କାନ୍ କରନ୍ତୁ & ନିଜ ମୋବାଇଲ୍ ରୁ ପ୍ରିଣ୍ଟ୍ କରନ୍ତୁ</p>
+          <img id="standeeQrImg" src="" alt="Customer QR" style="width: 240px; height: 240px; border-radius: 12px; margin-bottom: 12px;">
+          <div style="font-weight: 700; font-size: 0.95rem; color: #0f172a;" id="standeeUrlText"></div>
+        </div>
+
+        <button class="btn btn-primary" onclick="window.print()">🖨️ ଏହି ପୋଷ୍ଟର୍ ପ୍ରିଣ୍ଟ୍ କରନ୍ତୁ</button>
+      </div>
+    </section>
+
+    <!-- TAB 6: SUBSCRIPTION & 2 PLANS -->
+    <section id="tab-subscription" style="display: none;">
+      <div class="card" style="max-width: 700px; margin: 0 auto;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; flex-wrap: wrap; gap: 10px;">
+          <div>
+            <h3 style="margin: 0 0 4px;">ଆପଣଙ୍କ ସବସ୍କ୍ରିପସନ୍ ସ୍ଥିତି</h3>
+            <span style="font-size: 0.85rem; color: var(--text-muted);">Smart Print Cloud Platform Subscription</span>
+          </div>
+          <span class="sub-pill sub-pill-active" id="tabPlanStatusBadge">Active</span>
+        </div>
+
+        <div style="background: #f8fafc; border-radius: 14px; padding: 20px; border: 1px solid #e2e8f0; margin-bottom: 24px;">
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
+            <div>
+              <div style="font-size: 0.8rem; color: #64748b;">ବର୍ତ୍ତମାନର ପ୍ଲାନ୍:</div>
+              <div style="font-size: 1.1rem; font-weight: 700; color: #0f172a;" id="currPlanName">୬ ମାସ ଫ୍ରି ଟ୍ରାଏଲ୍</div>
+            </div>
+            <div>
+              <div style="font-size: 0.8rem; color: #64748b;">ବାକି ଥିବା ଦିନ:</div>
+              <div style="font-size: 1.1rem; font-weight: 800; color: #059669;" id="currDaysLeft">୧୮୦ ଦିନ</div>
+            </div>
+            <div>
+              <div style="font-size: 0.8rem; color: #64748b;">ସମାପ୍ତ ତାରିଖ (Expiry):</div>
+              <div style="font-size: 0.95rem; font-weight: 600; color: #334155;" id="currExpiryDate">-</div>
+            </div>
+            <div>
+              <div style="font-size: 0.8rem; color: #64748b;">ମୋଟ ପ୍ରିଣ୍ଟ୍ କାମ:</div>
+              <div style="font-size: 0.95rem; font-weight: 600; color: #334155;" id="currPrintCount">-</div>
+            </div>
+          </div>
+        </div>
+
+        <h4>ଆମର ୨ ଟି ରିନ୍ୟୁଆଲ୍ ପ୍ଲାନ୍ (Renewal Options)</h4>
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-top: 14px; margin-bottom: 24px;">
+          <!-- PLAN 1 -->
+          <div style="border: 2px solid #cbd5e1; border-radius: 12px; padding: 18px; text-align: center; background: #fff;">
+            <div style="font-weight: 800; font-size: 1.1rem; color: #1e293b;" id="dispPlan1Name">ପ୍ଲାନ୍ ୧: ୬ ମାସ</div>
+            <div style="font-size: 1.6rem; font-weight: 800; color: #0284c7; margin: 8px 0;" id="dispPlan1Price">₹499</div>
+            <div style="font-size: 0.82rem; color: #64748b; margin-bottom: 12px;">୧୮୦ ଦିନ ଅସୀମିତ ପ୍ରିଣ୍ଟ୍ ସୁବିଧା</div>
+            <button onclick="selectPlanForRenewal('plan1')" class="btn btn-sm btn-outline" style="width: 100%;">ଏହା ବାଛନ୍ତୁ</button>
+          </div>
+
+          <!-- PLAN 2 -->
+          <div style="border: 2px solid #2563eb; border-radius: 12px; padding: 18px; text-align: center; background: #eff6ff;">
+            <div style="display: inline-block; background: #2563eb; color: #fff; font-size: 0.7rem; font-weight: 800; padding: 2px 8px; border-radius: 999px; margin-bottom: 4px;">BEST VALUE</div>
+            <div style="font-weight: 800; font-size: 1.1rem; color: #1e293b;" id="dispPlan2Name">ପ୍ଲାନ୍ ୨: ୧ ବର୍ଷ</div>
+            <div style="font-size: 1.6rem; font-weight: 800; color: #16a34a; margin: 8px 0;" id="dispPlan2Price">₹899</div>
+            <div style="font-size: 0.82rem; color: #64748b; margin-bottom: 12px;">୩୬୫ ଦିନ ସୁପର ସେଭର୍ ପ୍ଲାନ୍</div>
+            <button onclick="selectPlanForRenewal('plan2')" class="btn btn-sm btn-primary" style="width: 100%;">ଏହା ବାଛନ୍ତୁ</button>
+          </div>
+        </div>
+
+        <button onclick="openRenewalModal()" class="btn btn-primary" style="width: 100%; padding: 12px; font-weight: 700;">
+          💳 ସବସ୍କ୍ରିପସନ୍ ରିନ୍ୟୁ କରନ୍ତୁ (Pay & Extend)
+        </button>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- RENEWAL MODAL -->
+  <div class="modal-overlay" id="renewalModal">
+    <div class="modal-card">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+        <h3 style="margin: 0; color: #0f172a;">💳 ସବସ୍କ୍ରିପସନ୍ ରିନ୍ୟୁଆଲ୍</h3>
+        <button onclick="closeRenewalModal()" style="background: none; border: none; font-size: 1.4rem; cursor: pointer;">✕</button>
+      </div>
+
+      <p style="font-size: 0.9rem; color: #475569; margin-bottom: 16px;">
+        ଆପଣଙ୍କ ପ୍ଲାନ୍ ବୃଦ୍ଧି କରିବା ପାଇଁ ନିମ୍ନଲିଖିତ QR କୋଡ୍ ସ୍କାନ୍ କରି ପ୍ଲାଟଫର୍ମ ମାଲିକଙ୍କୁ ପେମେଣ୍ଟ୍ କରନ୍ତୁ:
+      </p>
+
+      <!-- PLAN SELECTION IN MODAL -->
+      <div style="display: flex; gap: 10px; margin-bottom: 16px;">
+        <button id="modalTabPlan1" class="btn btn-sm" style="flex: 1; border: 2px solid #cbd5e1;" onclick="setModalPlan('plan1')">
+          ୬ ମାସ (₹499)
+        </button>
+        <button id="modalTabPlan2" class="btn btn-sm btn-primary" style="flex: 1;" onclick="setModalPlan('plan2')">
+          ୧ ବର୍ଷ (₹899)
+        </button>
+      </div>
+
+      <div style="text-align: center; background: #f8fafc; padding: 20px; border-radius: 14px; margin-bottom: 16px; border: 1px solid #e2e8f0;">
+        <div style="font-size: 1.1rem; font-weight: 800; color: #0f172a; margin-bottom: 8px;" id="modalAmountDisplay">ଦେୟ ରାଶି: ₹899</div>
+        <img id="superadminQrImg" src="" alt="Admin UPI QR" style="width: 180px; height: 180px; border-radius: 8px; margin-bottom: 8px;">
+        <div style="font-size: 0.85rem; color: #334155; font-weight: 700;">UPI ID: <span id="modalUpiIdText">9937037131@ybl</span></div>
+      </div>
+
+      <div class="form-group">
+        <label style="font-size: 0.85rem; font-weight: 700;">ପେମେଣ୍ଟ୍ Transaction ID / UTR ନମ୍ବର ଦିଅନ୍ତୁ</label>
+        <input type="text" id="renewalTxnInput" class="form-control" placeholder="ଉଦାହରଣ: 428192837192">
+      </div>
+
+      <button class="btn btn-success" style="width: 100%; padding: 12px; font-weight: 700;" onclick="submitRenewalRequest()">
+        ✅ ମୁଁ ପେମେଣ୍ଟ୍ କରିସାରିଛି (ସବମିଟ୍ କରନ୍ତୁ)
+      </button>
+    </div>
+  </div>
+
+  <script src="/static/js/dashboard.js"></script>
+</body>
+</html>

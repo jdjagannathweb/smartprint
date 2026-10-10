@@ -1,0 +1,291 @@
+﻿<!DOCTYPE html>
+<html lang="or">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ଦୋକାନୀ କଣ୍ଟ୍ରୋଲ୍ ପ୍ୟାନେଲ୍ - Smart QR Print</title>
+  <link rel="stylesheet" href="/static/css/admin.css">
+  <style>
+    .row-claimed {
+      background-color: #fefce8 !important;
+      border-left: 4px solid #eab308;
+    }
+    .pulse-badge {
+      animation: pulse-border 1.5s infinite;
+    }
+    @keyframes pulse-border {
+      0% { box-shadow: 0 0 0 0 rgba(234, 179, 8, 0.7); }
+      70% { box-shadow: 0 0 0 6px rgba(234, 179, 8, 0); }
+      100% { box-shadow: 0 0 0 0 rgba(234, 179, 8, 0); }
+    }
+    .handle-pill {
+      display: inline-block;
+      background: #e2e8f0;
+      color: #1e293b;
+      padding: 4px 10px;
+      border-radius: 6px;
+      font-size: 0.8rem;
+      cursor: pointer;
+      font-weight: 600;
+      border: 1px solid #cbd5e1;
+    }
+    .handle-pill:hover {
+      background: var(--primary);
+      color: #fff;
+      border-color: var(--primary);
+    }
+  </style>
+</head>
+<body>
+
+  <!-- ADMIN HEADER -->
+  <header class="admin-header">
+    <div class="admin-title">
+      <span style="font-size: 1.6rem;">🖨️</span>
+      <div>
+        <h1 id="topShopName">ସ୍ମାର୍ଟ ପ୍ରିଣ୍ଟ & ଜେରକ୍ସ ପଏଣ୍ଟ</h1>
+        <span style="font-size: 0.8rem; opacity: 0.85;">ଦୋକାନୀ ଆଡମିନ୍ ପ୍ୟାନେଲ୍ (Merchant Control)</span>
+      </div>
+    </div>
+    <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
+      <span class="ip-badge" id="publicUrlBadge" style="background: #065f46; color: #6ee7b7;">🌐 4G/5G ଲିଙ୍କ୍ ଲୋଡ୍ ହେଉଛି...</span>
+      <span class="ip-badge" id="lanIpBadge">📶 Wi-Fi: Loading...</span>
+      <a href="/" target="_blank" class="btn btn-sm btn-primary" style="background: #0284c7;">
+        🌐 ଗ୍ରାହକ ପୋର୍ଟାଲ୍ ଖୋଲନ୍ତୁ
+      </a>
+    </div>
+  </header>
+
+  <!-- NAV TABS -->
+  <nav class="admin-nav">
+    <button class="nav-tab active" onclick="switchTab('orders')">📋 ଲାଇଭ୍ ପ୍ରିଣ୍ଟ୍ ତାଲିକା & ରୋଜଗାର</button>
+    <button class="nav-tab" onclick="switchTab('pricing')">💰 ଦର & ପ୍ରାଇସିଂ</button>
+    <button class="nav-tab" onclick="switchTab('payment')">💳 ପେମେଣ୍ଟ୍ & UPI ସେଟିଙ୍ଗ୍</button>
+    <button class="nav-tab" onclick="switchTab('printer')">⚙️ ପ୍ରିଣ୍ଟର୍ ସେଟଅପ୍</button>
+    <button class="nav-tab" onclick="switchTab('standee')">🪧 କାଉଣ୍ଟର୍ QR ପୋଷ୍ଟର୍</button>
+  </nav>
+
+  <main class="admin-content">
+
+    <!-- TAB 1: ORDERS & QUEUE -->
+    <section id="tab-orders">
+      <div class="stats-grid">
+        <div class="stat-card" style="border-top: 4px solid var(--success);">
+          <div class="stat-label">ଆଜିର ମୋଟ ରୋଜଗାର</div>
+          <div class="stat-value" id="statRevenue" style="color: var(--success);">₹0.00</div>
+        </div>
+        <div class="stat-card" style="border-top: 4px solid #eab308; background: #fefce8;">
+          <div class="stat-label" style="color: #854d0e;">🔔 ଯାଞ୍ଚ ଅପେକ୍ଷାରେ (Claimed)</div>
+          <div class="stat-value" id="statClaimed" style="color: #854d0e;">0</div>
+        </div>
+        <div class="stat-card" style="border-top: 4px solid var(--primary);">
+          <div class="stat-label">ସଫଳ ପ୍ରିଣ୍ଟ୍</div>
+          <div class="stat-value" id="statPrinted" style="color: var(--primary);">0</div>
+        </div>
+        <div class="stat-card" style="border-top: 4px solid var(--border);">
+          <div class="stat-label">ମୋଟ ଅର୍ଡର୍</div>
+          <div class="stat-value" id="statTotalJobs">0</div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; flex-wrap: wrap; gap: 8px;">
+          <div>
+            <h3 style="margin-bottom: 2px;">ସାମ୍ପ୍ରତିକ ଅର୍ଡର୍ ଏବଂ ପ୍ରିଣ୍ଟ୍ ତାଲିକା</h3>
+            <span style="font-size: 0.8rem; color: var(--text-muted);">ଗ୍ରାହକ ପେମେଣ୍ଟ୍ କଲେ ଏଠାରେ ଯାଞ୍ଚ କରି କନଫର୍ମ କରନ୍ତୁ, ତାପରେ ହିଁ ପ୍ରିଣ୍ଟ୍ ବାହାରିବ।</span>
+          </div>
+          <button class="btn btn-sm btn-primary" onclick="loadJobsTable()">🔄 ରିଫ୍ରେସ୍</button>
+        </div>
+
+        <div class="table-responsive">
+          <table>
+            <thead>
+              <tr>
+                <th>ସମୟ</th>
+                <th>ଅର୍ଡର ID</th>
+                <th>ଫାଇଲ୍ ନାମ</th>
+                <th>ପେଜ୍</th>
+                <th>କପି</th>
+                <th>ପ୍ରକାର</th>
+                <th>ମୂଲ୍ୟ</th>
+                <th>ପେମେଣ୍ଟ୍ ସ୍ଥିତି</th>
+                <th>ପ୍ରିଣ୍ଟ୍ ସ୍ଥିତି</th>
+                <th>କାର୍ଯ୍ୟ (Action)</th>
+              </tr>
+            </thead>
+            <tbody id="jobsTableBody">
+              <tr>
+                <td colspan="10" style="text-align: center; color: var(--text-muted); padding: 24px;">
+                  ଡାଟା ଲୋଡ୍ ହେଉଛି...
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- TAB 2: PRICING SETTINGS -->
+    <section id="tab-pricing" style="display: none;">
+      <div class="card" style="max-width: 600px; margin: 0 auto;">
+        <h3 style="margin-bottom: 20px;">ପ୍ରିଣ୍ଟିଂ ଦର (ମୂଲ୍ୟ) ସେଟ୍ କରନ୍ତୁ</h3>
+        
+        <div class="form-group">
+          <label class="form-label">କଳା & ଧଳା (B&W) ପ୍ରିଣ୍ଟ୍ ଦର (ପ୍ରତି ପେଜ୍ ₹):</label>
+          <input type="number" id="rateBwInput" step="0.5" min="0" class="form-control" value="2.0">
+          <span style="font-size: 0.78rem; color: var(--text-muted);">ଉଦା. ₹୨ କିମ୍ବା ₹୩ ପ୍ରତି ପେଜ୍</span>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">ରଙ୍ଗୀନ (Color) ପ୍ରିଣ୍ଟ୍ ଦର (ପ୍ରତି ପେଜ୍ ₹):</label>
+          <input type="number" id="rateColorInput" step="1" min="0" class="form-control" value="10.0">
+          <span style="font-size: 0.78rem; color: var(--text-muted);">ଉଦା. ₹୧୦ କିମ୍ବା ₹୧୫ ପ୍ରତି ପେଜ୍</span>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">ଆଡମିନ୍ ପିନ୍ (PIN):</label>
+          <input type="password" id="pinPricingInput" class="form-control" placeholder="ଡିଫଲ୍ଟ: 1234">
+        </div>
+
+        <button class="btn btn-success" onclick="savePricingSettings()">
+          💾 ଦର ସେଭ୍ କରନ୍ତୁ
+        </button>
+      </div>
+    </section>
+
+    <!-- TAB 3: PAYMENT SETTINGS -->
+    <section id="tab-payment" style="display: none;">
+      <div class="card" style="max-width: 650px; margin: 0 auto;">
+        <h3 style="margin-bottom: 20px;">UPI ଏବଂ ବ୍ୟବସାୟ ସେଟିଙ୍ଗ୍</h3>
+
+        <div class="form-group">
+          <label class="form-label">ଦୋକାନ / ବ୍ୟବସାୟର ନାମ:</label>
+          <input type="text" id="shopNameInput" class="form-control" placeholder="ଉଦା. ଡିଜିଟାଲ୍ ଜେରକ୍ସ ପଏଣ୍ଟ">
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">ଆପଣଙ୍କ ସଠିକ୍ UPI ID (VPA):</label>
+          <input type="text" id="upiIdInput" class="form-control" placeholder="ଉଦା. 9937037131@ybl">
+          <div style="margin-top: 8px; display: flex; gap: 6px; flex-wrap: wrap; align-items: center;">
+            <span style="font-size: 0.76rem; color: var(--text-muted); font-weight: 700;">କ୍ଲିକ୍ କରି ହ୍ୟାଣ୍ଡେଲ୍ ଯୋଡ଼ନ୍ତୁ:</span>
+            <span class="handle-pill" onclick="appendHandle('@ybl')">@ybl (PhonePe)</span>
+            <span class="handle-pill" onclick="appendHandle('@ibl')">@ibl (PhonePe)</span>
+            <span class="handle-pill" onclick="appendHandle('@paytm')">@paytm</span>
+            <span class="handle-pill" onclick="appendHandle('@okhdfcbank')">@okhdfcbank (GPay)</span>
+            <span class="handle-pill" onclick="appendHandle('@oksbi')">@oksbi (GPay)</span>
+          </div>
+          <span style="font-size: 0.78rem; color: var(--text-muted); margin-top: 6px; display: block;">
+            ⚠️ ଧ୍ୟାନ ଦିଅନ୍ତୁ: PhonePe ହ୍ୟାଣ୍ଡେଲ୍ (@ybl କିମ୍ବା @ibl) ଏବଂ GPay ହ୍ୟାଣ୍ଡେଲ୍ (@okhdfcbank, @oksbi) ହୋଇଥାଏ। ଭୁଲ୍ ହ୍ୟାଣ୍ଡେଲ୍ ଲେଖିଲେ ପେମେଣ୍ଟ୍ ଫେଲ୍ ହୁଏ।
+          </span>
+        </div>
+
+        <!-- UPLOAD OFFICIAL SHOP QR PHOTO -->
+        <div class="form-group" style="background: #f8fafc; border: 2px dashed #cbd5e1; border-radius: 10px; padding: 16px; margin: 20px 0;">
+          <label class="form-label" style="color: var(--primary);">📸 ଦୋକାନର ଅସଲ PhonePe / GPay QR କୋଡ୍ ଫଟୋ ଅପଲୋଡ୍ କରନ୍ତୁ (ସର୍ବୋତ୍ତମ ବିକଳ୍ପ):</label>
+          <p style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: 12px;">
+            ଆପଣଙ୍କ ଦୋକାନରେ ଥିବା PhonePe, Google Pay କିମ୍ବା Paytm ଷ୍ଟାଣ୍ଡି ର ଏକ ସଫା ଫଟୋ ଉଠାଇ ଏଠାରେ ଅପଲୋଡ୍ କରିଦିଅନ୍ତୁ। ଗ୍ରାହକ ସିଧାସଳଖ ସେହି ଅସଲ QR କୋଡ୍ କୁ ସ୍କାନ୍ କରି ପେ କରିବେ—ଏଥିରେ ପେମେଣ୍ଟ୍ <strong>କଦାପି ଫେଲ୍ ହେବ ନାହିଁ!</strong>
+          </p>
+          <div style="display: flex; gap: 12px; align-items: center; flex-wrap: wrap;">
+            <button type="button" class="btn btn-sm btn-primary" onclick="document.getElementById('shopQrFileInput').click()">
+              📁 QR ଫଟୋ ବାଛନ୍ତୁ
+            </button>
+            <button type="button" class="btn btn-sm btn-danger" id="btnRemoveShopQr" style="display: none;" onclick="removeShopQr()">
+              🗑️ ଅପଲୋଡ୍ QR ହଟାନ୍ତୁ
+            </button>
+            <input type="file" id="shopQrFileInput" accept="image/*" style="display: none;" onchange="uploadShopQrFile(event)">
+          </div>
+          <div id="shopQrPreviewContainer" style="margin-top: 12px; display: none;">
+            <span style="font-size: 0.78rem; font-weight: 700; color: var(--success);">✅ ଅପଲୋଡ୍ ହୋଇଥିବା QR କୋଡ୍:</span><br>
+            <img id="shopQrPreviewImg" src="" style="width: 140px; height: 140px; object-fit: contain; border: 1px solid var(--border); border-radius: 8px; margin-top: 6px;">
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">ଆଡମିନ୍ ପିନ୍ (PIN):</label>
+          <input type="password" id="pinPaymentInput" class="form-control" placeholder="ଡିଫଲ୍ଟ: 1234">
+        </div>
+
+        <button class="btn btn-success" onclick="savePaymentSettings()">
+          💾 UPI ସେଟିଙ୍ଗ୍ ସେଭ୍ କରନ୍ତୁ
+        </button>
+      </div>
+    </section>
+
+    <!-- TAB 4: PRINTER SETTINGS -->
+    <section id="tab-printer" style="display: none;">
+      <div class="card" style="max-width: 650px; margin: 0 auto;">
+        <h3 style="margin-bottom: 20px;">ପ୍ରିଣ୍ଟର୍ ଏବଂ ଅଟୋ-ପ୍ରିଣ୍ଟ୍ କନଫିଗରେସନ୍</h3>
+
+        <div class="form-group">
+          <label class="form-label">ଡିଫଲ୍ଟ ପ୍ରିଣ୍ଟର୍ ବାଛନ୍ତୁ:</label>
+          <select id="printerSelect" class="form-control">
+            <option value="">ସିଷ୍ଟମ୍ ଡିଫଲ୍ଟ ପ୍ରିଣ୍ଟର୍</option>
+          </select>
+          <span style="font-size: 0.78rem; color: var(--text-muted);">
+            କମ୍ପ୍ୟୁଟର ସହ ସଂଯୁକ୍ତ ପ୍ରିଣ୍ଟର୍ ଗୁଡ଼ିକ ମଧ୍ୟରୁ ବାଛନ୍ତୁ (ଯଥା Epson L3210, Konica Minolta 205i, ଇତ୍ୟାଦି)
+          </span>
+        </div>
+
+        <div class="form-group" style="background: #f8fafc; padding: 14px; border-radius: 8px; border: 1px solid var(--border);">
+          <label style="display: flex; align-items: center; gap: 10px; cursor: pointer; font-weight: 700;">
+            <input type="checkbox" id="autoPrintToggle" style="width: 20px; height: 20px;" checked>
+            ସାଇଲେଣ୍ଟ୍ ପ୍ରିଣ୍ଟିଂ ସକ୍ରିୟ (Silent Print Dispatch)
+          </label>
+          <p style="font-size: 0.8rem; color: var(--text-muted); margin-top: 6px; margin-left: 30px;">
+            ଦୋକାନୀ "ପେମେଣ୍ଟ୍ ମିଳିଲା & ପ୍ରିଣ୍ଟ୍" କ୍ଲିକ୍ କରିବା ମାତ୍ରେ କୌଣସି ପପ୍-ଅପ୍ ନଆସି ସିଧା ପ୍ରିଣ୍ଟର୍ କୁ କମାଣ୍ଡ୍ ଯିବ।
+          </p>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">ଆଡମିନ୍ ପିନ୍ (PIN):</label>
+          <input type="password" id="pinPrinterInput" class="form-control" placeholder="ଡିଫଲ୍ଟ: 1234">
+        </div>
+
+        <div style="display: flex; gap: 12px; flex-wrap: wrap;">
+          <button class="btn btn-success" onclick="savePrinterSettings()">
+            💾 ପ୍ରିଣ୍ଟର୍ ସେଟିଙ୍ଗ୍ ସେଭ୍ କରନ୍ତୁ
+          </button>
+          <button class="btn btn-primary" onclick="sendTestPrint()">
+            🖨️ ଟେଷ୍ଟ୍ ପ୍ରିଣ୍ଟ୍ ପେଜ୍ କାଢ଼ନ୍ତୁ
+          </button>
+        </div>
+      </div>
+    </section>
+
+    <!-- TAB 5: STANDEE POSTER -->
+    <section id="tab-standee" style="display: none;">
+      <div style="text-align: center; margin-bottom: 16px;">
+        <button class="btn btn-primary" onclick="window.print()">
+          🖨️ ଏହି ପୋଷ୍ଟର୍ ପ୍ରିଣ୍ଟ୍ କରି କାଉଣ୍ଟରରେ ଲଗାନ୍ତୁ
+        </button>
+      </div>
+
+      <div class="standee-card">
+        <h2 id="standeeShopTitle" style="font-size: 1.4rem; color: #0f172a; text-transform: uppercase;">ସ୍ମାର୍ଟ ପ୍ରିଣ୍ଟ ପଏଣ୍ଟ</h2>
+        <p style="font-size: 0.85rem; color: var(--primary); font-weight: 700; margin: 6px 0 16px;">
+          ⚡ ସ୍କାନ୍, ପେମେଣ୍ଟ୍ ଏବଂ ଅଟୋ-ପ୍ରିଣ୍ଟ୍ ସେବା ⚡
+        </p>
+
+        <img id="standeeQrImg" class="standee-qr" src="" alt="Counter QR Code">
+
+        <div style="font-size: 0.95rem; font-weight: 700; color: #1e293b; margin-bottom: 8px;">
+          ଆପଣଙ୍କ ମୋବାଇଲ୍ କ୍ୟାମେରାରୁ ସ୍କାନ୍ କରନ୍ତୁ
+        </div>
+
+        <p style="font-size: 0.82rem; color: var(--text-muted); line-height: 1.6; margin-bottom: 16px;">
+          ୧. QR ସ୍କାନ୍ କରନ୍ତୁ ଏବଂ PDF/ଫଟୋ ଅପଲୋଡ୍ କରନ୍ତୁ<br>
+          ୨. କଲର୍ କିମ୍ବା B&W ବାଛନ୍ତୁ ଏବଂ UPI ରେ ପେ କରନ୍ତୁ<br>
+          ୩. କାଉଣ୍ଟରରୁ ତୁରନ୍ତ ପ୍ରିଣ୍ଟ୍ କାଗଜ ସଂଗ୍ରହ କରନ୍ତୁ!
+        </p>
+
+        <div style="font-size: 0.75rem; background: #f1f5f9; padding: 6px; border-radius: 6px; color: #475569; font-family: monospace;" id="standeeUrlText">
+          Loading URL...
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <script src="/static/js/admin.js"></script>
+</body>
+</html>

@@ -1,0 +1,146 @@
+﻿<!DOCTYPE html>
+<html lang="or">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Smart Print Cloud - ଆପଣଙ୍କ ଜେରକ୍ସ ଦୋକାନକୁ ସ୍ମାର୍ଟ କରନ୍ତୁ</title>
+  <link rel="stylesheet" href="/static/css/admin.css">
+  <style>
+    .hero {
+      background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
+      color: #fff;
+      padding: 60px 20px;
+      text-align: center;
+      border-radius: 0 0 24px 24px;
+    }
+    .hero h1 { font-size: 2.2rem; font-weight: 800; margin-bottom: 12px; }
+    .hero p { font-size: 1.1rem; color: #94a3b8; max-width: 600px; margin: 0 auto 24px; }
+    .pricing-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+      gap: 24px;
+      max-width: 900px;
+      margin: -30px auto 40px;
+      padding: 0 16px;
+    }
+    .pricing-card {
+      background: #fff;
+      border-radius: 16px;
+      padding: 32px 24px;
+      box-shadow: 0 10px 25px rgba(0,0,0,0.08);
+      border: 2px solid var(--border);
+      text-align: center;
+      position: relative;
+    }
+    .pricing-card.featured {
+      border-color: #2563eb;
+      transform: scale(1.02);
+    }
+    .badge-featured {
+      position: absolute;
+      top: -12px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: #2563eb;
+      color: #fff;
+      padding: 4px 14px;
+      border-radius: 999px;
+      font-size: 0.8rem;
+      font-weight: 800;
+    }
+    .price-tag { font-size: 2.4rem; font-weight: 800; color: #0f172a; margin: 16px 0 8px; }
+    .features-list { text-align: left; margin: 20px 0; font-size: 0.95rem; color: #334155; line-height: 2; list-style: none; padding: 0; }
+    .features-list li::before { content: "✅ "; color: #16a34a; }
+  </style>
+</head>
+<body style="background: #f8fafc;">
+
+  <!-- NAVBAR -->
+  <header style="background: #0f172a; padding: 16px 24px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px;">
+    <div style="display: flex; align-items: center; gap: 10px; color: #fff;">
+      <span style="font-size: 1.8rem;">🖨️</span>
+      <span style="font-size: 1.25rem; font-weight: 800; letter-spacing: 0.5px;">SMART PRINT CLOUD</span>
+    </div>
+    <div style="display: flex; gap: 12px;">
+      <a href="/login" class="btn btn-sm" style="background: #334155; color: #fff;">🔑 ଦୋକାନୀ ଲଗ୍ଇନ୍</a>
+      <a href="/register" class="btn btn-sm btn-primary">🏪 ଫ୍ରି ରେଜିଷ୍ଟ୍ରେସନ୍</a>
+      <a href="/superadmin" class="btn btn-sm" style="background: transparent; color: #94a3b8; border: 1px solid #334155;">👑 Super Admin</a>
+    </div>
+  </header>
+
+  <!-- HERO -->
+  <section class="hero">
+    <div style="display: inline-block; background: #065f46; color: #6ee7b7; padding: 4px 16px; border-radius: 999px; font-weight: 700; font-size: 0.85rem; margin-bottom: 16px;">
+      🎉 ସମସ୍ତ ନୂଆ ଦୋକାନୀଙ୍କ ପାଇଁ ୬ ମାସ ସମ୍ପୂର୍ଣ୍ଣ ମାଗଣା!
+    </div>
+    <h1>ଜେରକ୍ସ & ପ୍ରିଣ୍ଟ୍ ଦୋକାନ ପାଇଁ ସ୍ମାର୍ଟ ସଲ୍ୟୁସନ୍</h1>
+    <p>ଗ୍ରାହକ QR ସ୍କାନ୍ କରି ଫାଇଲ୍ ଅପଲୋଡ୍ କରିବେ, UPI ରେ ପେମେଣ୍ଟ୍ କରିବେ, ଏବଂ ଆପଣଙ୍କ ପ୍ରିଣ୍ଟର୍ ରୁ ସିଧା ପ୍ରିଣ୍ଟ୍ ବାହାରିବ!</p>
+    <div style="display: flex; justify-content: center; gap: 14px; flex-wrap: wrap;">
+      <a href="/register" class="btn btn-success" style="font-size: 1.1rem; padding: 14px 28px;">
+        🚀 ଏବେ ହିଁ ମାଗଣାରେ ଯୋଡ଼ି ହୁଅନ୍ତୁ (Join Free)
+      </a>
+      <a href="/login" class="btn" style="background: #fff; color: #0f172a; font-size: 1.1rem; padding: 14px 24px;">
+        ଦୋକାନୀ ଡ୍ୟାସବୋର୍ଡ
+      </a>
+    </div>
+  </section>
+
+  <!-- PRICING / 2 PLANS -->
+  <section>
+    <div style="text-align: center; margin-top: 50px; margin-bottom: 30px;">
+      <h2 style="font-size: 1.8rem; font-weight: 800; color: #0f172a;">ଆମର ୨ ଟି ସୁଲଭ ସବସ୍କ୍ରିପସନ୍ ପ୍ଲାନ୍</h2>
+      <p style="color: #64748b;">କୌଣସି ଲୁକ୍କାୟିତ ଚାର୍ଜ ନାହିଁ। ପ୍ରଥମ ୬ ମାସ ଫ୍ରି ଟ୍ରାଏଲ୍ ଉପଭୋଗ କରନ୍ତୁ।</p>
+    </div>
+
+    <div class="pricing-grid">
+      <!-- PLAN 1 -->
+      <div class="pricing-card">
+        <h3 style="font-size: 1.3rem; color: #1e293b;">ପ୍ଲାନ୍ ୧: ୬ ମାସ ପ୍ଲାନ୍</h3>
+        <p style="color: #64748b; font-size: 0.88rem;">ଛୋଟ ଦୋକାନୀଙ୍କ ପାଇଁ ଆଦର୍ଶ</p>
+        <div class="price-tag">
+          <span style="font-size: 1.2rem; color: #16a34a; font-weight: 700;">ପ୍ରଥମେ ୬ ମାସ ଫ୍ରି!</span><br>
+          <span style="font-size: 1.8rem; font-weight: 800;">₹499</span>
+          <span style="font-size: 0.9rem; color: #64748b; font-weight: 500;"> / ୬ ମାସ ରିନ୍ୟୁଆଲ୍</span>
+        </div>
+        <ul class="features-list">
+          <li>ପ୍ରଥମ ୧୮୦ ଦିନ (୬ ମାସ) ସମ୍ପୂର୍ଣ୍ଣ ମାଗଣା</li>
+          <li>ଅନଲିମିଟେଡ୍ ଗ୍ରାହକ ଅପଲୋଡ୍ & ପ୍ରିଣ୍ଟିଂ</li>
+          <li>ନିଜସ୍ୱ UPI QR କୋଡ୍ ସେଟିଙ୍ଗ୍</li>
+          <li>କାଉଣ୍ଟର୍ QR ଷ୍ଟାଣ୍ଡି ପୋଷ୍ଟର୍</li>
+          <li>Option 2 Print Connector ସପୋର୍ଟ</li>
+        </ul>
+        <a href="/register" class="btn btn-primary" style="width: 100%;">
+          ଏହି ପ୍ଲାନ୍ ରେ ରେଜିଷ୍ଟର କରନ୍ତୁ
+        </a>
+      </div>
+
+      <!-- PLAN 2 (FEATURED) -->
+      <div class="pricing-card featured">
+        <div class="badge-featured">⭐ ସର୍ବାଧିକ ଲୋକପ୍ରିୟ (Best Value)</div>
+        <h3 style="font-size: 1.3rem; color: #1e293b; margin-top: 10px;">ପ୍ଲାନ୍ ୨: ୧ ବର୍ଷ ପ୍ଲାନ୍</h3>
+        <p style="color: #64748b; font-size: 0.88rem;">ବାର୍ଷିକ ସୁପର୍ ସେଭର୍ ପ୍ଲାନ୍</p>
+        <div class="price-tag">
+          <span style="font-size: 1.8rem; font-weight: 800; color: #2563eb;">₹899</span>
+          <span style="font-size: 0.9rem; color: #64748b; font-weight: 500;"> / ବର୍ଷକୁ (୩୬୫ ଦିନ)</span>
+        </div>
+        <ul class="features-list">
+          <li>ସମ୍ପୂର୍ଣ୍ଣ ୧ ବର୍ଷ ଅବଧି</li>
+          <li>ମାସିକ ମାତ୍ର ₹୭୫ ଖର୍ଚ୍ଚ</li>
+          <li>ପ୍ରାଥମିକତା ସପୋର୍ଟ & ଅପଡେଟ୍</li>
+          <li>ଅନଲିମିଟେଡ୍ ପ୍ରିଣ୍ଟ୍ & କାଷ୍ଟମର ଅର୍ଡର୍</li>
+          <li>ସମସ୍ତ ପ୍ରିଣ୍ଟର୍ ସହ ସୁସଙ୍ଗତ (Epson, Canon, HP)</li>
+        </ul>
+        <a href="/register" class="btn btn-success" style="width: 100%;">
+          ୧ ବର୍ଷ ପ୍ଲାନ୍ ରେ ଆରମ୍ଭ କରନ୍ତୁ
+        </a>
+      </div>
+    </div>
+  </section>
+
+  <!-- FOOTER -->
+  <footer style="text-align: center; padding: 30px; color: #64748b; font-size: 0.85rem; border-top: 1px solid #e2e8f0;">
+    <p>Smart Print Cloud SaaS Platform &bull; Powered by Google Antigravity &bull; <a href="/superadmin" style="color: #2563eb; text-decoration: none;">Master Super Admin Login</a></p>
+  </footer>
+
+</body>
+</html>
