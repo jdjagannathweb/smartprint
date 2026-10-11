@@ -262,7 +262,8 @@ def create_smbupi_order(
                 "Content-Type": "application/json",
                 "X-API-Key": api_key.strip(),
                 "X-API-Secret": api_secret.strip(),
-                "User-Agent": "SmartPrint/1.0"
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+                "Accept": "application/json, text/plain, */*"
             }
         )
         with urllib.request.urlopen(req, timeout=12) as response:
@@ -303,7 +304,8 @@ def check_smbupi_order_status(api_key: str, api_secret: str, order_id: str) -> d
                 "Content-Type": "application/json",
                 "X-API-Key": api_key.strip(),
                 "X-API-Secret": api_secret.strip(),
-                "User-Agent": "SmartPrint/1.0"
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+                "Accept": "application/json, text/plain, */*"
             }
         )
         with urllib.request.urlopen(req, timeout=10) as response:

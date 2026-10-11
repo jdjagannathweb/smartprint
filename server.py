@@ -437,6 +437,8 @@ def customer_configure_job(job_id: str, body: CustomerConfigureRequest):
         )
         if smb_res.get("success"):
             smbupi_pay_url = smb_res.get("payment_url", "")
+        else:
+            print(f"[SMBUPI CREATE ORDER ERROR] {smb_res.get('error')}")
     
     updated = database.update_job_status(job_id, {
         "num_pages_to_print": num_pages,
