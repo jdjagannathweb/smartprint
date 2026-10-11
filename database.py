@@ -58,6 +58,91 @@ def init_db():
         conn.commit()
     except Exception:
         pass
+    try:
+        c.execute("ALTER TABLE shops ADD COLUMN paytm_mid TEXT DEFAULT ''")
+        conn.commit()
+    except Exception:
+        pass
+    try:
+        c.execute("ALTER TABLE shops ADD COLUMN paytm_merchant_key TEXT DEFAULT ''")
+        conn.commit()
+    except Exception:
+        pass
+    try:
+        c.execute("ALTER TABLE shops ADD COLUMN paytm_vpa TEXT DEFAULT ''")
+        conn.commit()
+    except Exception:
+        pass
+    try:
+        c.execute("ALTER TABLE shops ADD COLUMN paytm_enabled INTEGER DEFAULT 0")
+        conn.commit()
+    except Exception:
+        pass
+    try:
+        c.execute("ALTER TABLE jobs ADD COLUMN paytm_txn_id TEXT DEFAULT ''")
+        conn.commit()
+    except Exception:
+        pass
+    try:
+        c.execute("ALTER TABLE shops ADD COLUMN phonepe_client_id TEXT DEFAULT ''")
+        conn.commit()
+    except Exception:
+        pass
+    try:
+        c.execute("ALTER TABLE shops ADD COLUMN phonepe_client_secret TEXT DEFAULT ''")
+        conn.commit()
+    except Exception:
+        pass
+    try:
+        c.execute("ALTER TABLE shops ADD COLUMN phonepe_client_version INTEGER DEFAULT 1")
+        conn.commit()
+    except Exception:
+        pass
+    try:
+        c.execute("ALTER TABLE shops ADD COLUMN phonepe_env TEXT DEFAULT 'PRODUCTION'")
+        conn.commit()
+    except Exception:
+        pass
+    try:
+        c.execute("ALTER TABLE shops ADD COLUMN phonepe_enabled INTEGER DEFAULT 0")
+        conn.commit()
+    except Exception:
+        pass
+    try:
+        c.execute("ALTER TABLE jobs ADD COLUMN phonepe_order_id TEXT DEFAULT ''")
+        conn.commit()
+    except Exception:
+        pass
+    try:
+        c.execute("ALTER TABLE jobs ADD COLUMN phonepe_redirect_url TEXT DEFAULT ''")
+        conn.commit()
+    except Exception:
+        pass
+    try:
+        c.execute("ALTER TABLE shops ADD COLUMN smbupi_api_key TEXT DEFAULT ''")
+        conn.commit()
+    except Exception:
+        pass
+    try:
+        c.execute("ALTER TABLE shops ADD COLUMN smbupi_api_secret TEXT DEFAULT ''")
+        conn.commit()
+    except Exception:
+        pass
+    try:
+        c.execute("ALTER TABLE shops ADD COLUMN smbupi_webhook_secret TEXT DEFAULT ''")
+        conn.commit()
+    except Exception:
+        pass
+    try:
+        c.execute("ALTER TABLE shops ADD COLUMN smbupi_enabled INTEGER DEFAULT 0")
+        conn.commit()
+    except Exception:
+        pass
+    try:
+        c.execute("ALTER TABLE jobs ADD COLUMN smbupi_payment_url TEXT DEFAULT ''")
+        conn.commit()
+    except Exception:
+        pass
     
     # 2. Print Jobs table
     c.execute("""
@@ -232,7 +317,10 @@ def update_shop_settings(shop_id, updates):
     values = []
     allowed = ["shop_name", "owner_name", "upi_id", "upi_name", "shop_qr_image",
                "rate_bw", "rate_color", "rate_double_bw", "rate_double_color",
-               "selected_printer", "auto_print_enabled", "password", "is_active"]
+               "selected_printer", "auto_print_enabled", "password", "is_active",
+               "paytm_mid", "paytm_merchant_key", "paytm_vpa", "paytm_enabled",
+               "phonepe_client_id", "phonepe_client_secret", "phonepe_client_version", "phonepe_env", "phonepe_enabled",
+               "smbupi_api_key", "smbupi_api_secret", "smbupi_webhook_secret", "smbupi_enabled"]
     for k in allowed:
         if k in updates:
             fields.append(f"{k} = ?")
@@ -306,7 +394,7 @@ def update_job_status(job_id, updates):
     c = conn.cursor()
     fields = []
     values = []
-    for k in ["num_pages_to_print", "copies", "color_mode", "print_side", "rate_per_page", "total_amount", "payment_status", "print_status", "print_error"]:
+    for k in ["num_pages_to_print", "copies", "color_mode", "print_side", "rate_per_page", "total_amount", "payment_status", "print_status", "print_error", "paytm_txn_id", "phonepe_order_id", "phonepe_redirect_url", "smbupi_payment_url"]:
         if k in updates:
             fields.append(f"{k} = ?")
             values.append(updates[k])

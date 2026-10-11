@@ -144,6 +144,40 @@ async function loadShopDetails() {
       document.getElementById("customQrPreviewBox").style.display = "none";
     }
 
+    // Paytm Business
+    const paytmToggle = document.getElementById("paytmEnabledToggle");
+    if (paytmToggle) paytmToggle.checked = Boolean(shop.paytm_enabled);
+    const paytmMid = document.getElementById("paytmMidInput");
+    if (paytmMid) paytmMid.value = shop.paytm_mid || "";
+    const paytmKey = document.getElementById("paytmKeyInput");
+    if (paytmKey) paytmKey.value = shop.paytm_merchant_key || "";
+    const paytmVpa = document.getElementById("paytmVpaInput");
+    if (paytmVpa) paytmVpa.value = shop.paytm_vpa || "";
+
+    // PhonePe Standard Checkout
+    const phonepeToggle = document.getElementById("phonepeEnabledToggle");
+    if (phonepeToggle) phonepeToggle.checked = Boolean(shop.phonepe_enabled);
+    const phonepeClientId = document.getElementById("phonepeClientIdInput");
+    if (phonepeClientId) phonepeClientId.value = shop.phonepe_client_id || "";
+    const phonepeSecret = document.getElementById("phonepeClientSecretInput");
+    if (phonepeSecret) phonepeSecret.value = shop.phonepe_client_secret || "";
+    const phonepeVersion = document.getElementById("phonepeClientVersionInput");
+    if (phonepeVersion) phonepeVersion.value = shop.phonepe_client_version || 1;
+    const phonepeEnv = document.getElementById("phonepeEnvSelect");
+    if (phonepeEnv) phonepeEnv.value = shop.phonepe_env || "PRODUCTION";
+
+    // SMB UPI (smbupi.com)
+    const smbToggle = document.getElementById("smbupiEnabledToggle");
+    if (smbToggle) smbToggle.checked = Boolean(shop.smbupi_enabled);
+    const smbKey = document.getElementById("smbupiApiKeyInput");
+    if (smbKey) smbKey.value = shop.smbupi_api_key || "";
+    const smbSecret = document.getElementById("smbupiApiSecretInput");
+    if (smbSecret) smbSecret.value = shop.smbupi_api_secret || "";
+    const smbWebhookSec = document.getElementById("smbupiWebhookSecretInput");
+    if (smbWebhookSec) smbWebhookSec.value = shop.smbupi_webhook_secret || "";
+    const smbWebhookUrl = document.getElementById("dispSmbWebhookUrl");
+    if (smbWebhookUrl) smbWebhookUrl.value = window.location.origin + "/api/webhooks/smbupi";
+
     // Subscription & Validity
     const daysLeft = shop.days_left !== undefined ? shop.days_left : 180;
     const isValid = shop.is_valid;
@@ -564,6 +598,165 @@ async function uploadStandeeImage() {
     }
   } catch (err) {
     alert("Error uploading standee photo: " + err.message);
+  }
+}
+
+function togglePaytmKeyVisibility() {
+  const keyInput = document.getElementById("paytmKeyInput");
+  if (!keyInput) return;
+  keyInput.type = keyInput.type === "password" ? "text" : "password";
+}
+
+async function savePaytmSettings() {
+  const enabled = document.getElementById("paytmEnabledToggle")?.checked ? 1 : 0;
+  const mid = document.getElementById("paytmMidInput")?.value.trim() || "";
+  const key = document.getElementById("paytmKeyInput")?.value.trim() || "";
+  const vpa = document.getElementById("paytmVpaInput")?.value.trim() || "";
+
+  if (enabled && (!mid || !key || !vpa)) {
+    alert("⚠️ ଦୟାକରି Paytm MID, Merchant Key ଏବଂ UPI VPA ସବୁକିଛି ପୂରଣ କରନ୍ତୁ!");
+    return;
+  }
+
+  try {
+    const res = await fetch(`/api/shop/${currentShopId}/settings`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        shop_name: currentShop.shop_name,
+        owner_name: currentShop.owner_name,
+        upi_id: currentShop.upi_id,
+        rate_bw: currentShop.rate_bw,
+        rate_double_bw: currentShop.rate_double_bw,
+        rate_color: currentShop.rate_color,
+        rate_double_color: currentShop.rate_double_color,
+        selected_printer: currentShop.selected_printer || "",
+        auto_print_enabled: currentShop.auto_print_enabled,
+        paytm_mid: mid,
+        paytm_merchant_key: key,
+        paytm_vpa: vpa,
+        paytm_enabled: enabled
+      })
+    });
+    if (res.ok) {
+      alert("✅ Paytm Business ସେଟିଙ୍ଗ୍ ସଫଳତାର ସହ ସେଭ୍ ହେଲା!");
+      await loadShopDetails();
+    } else {
+      const err = await res.json();
+      alert("ଭୁଲ୍: " + (err.detail || "Failed to save Paytm settings"));
+    }
+  } catch (err) {
+    alert("Error saving Paytm settings: " + err.message);
+  }
+}
+
+function togglePhonePeSecretVisibility() {
+  const el = document.getElementById("phonepeClientSecretInput");
+  if (!el) return;
+  el.type = el.type === "password" ? "text" : "password";
+}
+
+async function savePhonePeSettings() {
+  const enabled = document.getElementById("phonepeEnabledToggle")?.checked ? 1 : 0;
+  const clientId = document.getElementById("phonepeClientIdInput")?.value.trim() || "";
+  const clientSecret = document.getElementById("phonepeClientSecretInput")?.value.trim() || "";
+  const clientVersion = parseInt(document.getElementById("phonepeClientVersionInput")?.value || 1);
+  const env = document.getElementById("phonepeEnvSelect")?.value || "PRODUCTION";
+
+  if (enabled && (!clientId || !clientSecret)) {
+    alert("⚠️ ଦୟାକରି PhonePe Client ID ଏବଂ Client Secret ଦୁଇଟିଯାକ ପୂରଣ କରନ୍ତୁ!");
+    return;
+  }
+
+  try {
+    const res = await fetch(`/api/shop/${currentShopId}/settings`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        shop_name: currentShop.shop_name,
+        owner_name: currentShop.owner_name,
+        upi_id: currentShop.upi_id,
+        rate_bw: currentShop.rate_bw,
+        rate_double_bw: currentShop.rate_double_bw,
+        rate_color: currentShop.rate_color,
+        rate_double_color: currentShop.rate_double_color,
+        selected_printer: currentShop.selected_printer || "",
+        auto_print_enabled: currentShop.auto_print_enabled,
+        phonepe_client_id: clientId,
+        phonepe_client_secret: clientSecret,
+        phonepe_client_version: clientVersion,
+        phonepe_env: env,
+        phonepe_enabled: enabled
+      })
+    });
+    if (res.ok) {
+      alert("✅ PhonePe Standard Checkout ସେଟିଙ୍ଗ୍ ସଫଳତାର ସହ ସେଭ୍ ହେଲା!");
+      await loadShopDetails();
+    } else {
+      const err = await res.json();
+      alert("ଭୁଲ୍: " + (err.detail || "Failed to save PhonePe settings"));
+    }
+  } catch (err) {
+    alert("Error saving PhonePe settings: " + err.message);
+  }
+}
+
+function toggleSmbUpiSecretVisibility() {
+  const el = document.getElementById("smbupiApiSecretInput");
+  if (!el) return;
+  el.type = el.type === "password" ? "text" : "password";
+}
+
+function copySmbWebhookUrl() {
+  const el = document.getElementById("dispSmbWebhookUrl");
+  const url = el ? el.value : (window.location.origin + "/api/webhooks/smbupi");
+  navigator.clipboard.writeText(url).then(() => {
+    alert("✅ Webhook URL କପି ହୋଇଗଲା!\nsmbupi.com Dashboard ➡️ Webhooks ରେ Paste କରନ୍ତୁ।");
+  }).catch(() => {
+    prompt("ଏହି URL କପି କରନ୍ତୁ:", url);
+  });
+}
+
+async function saveSmbUpiSettings() {
+  const enabled = document.getElementById("smbupiEnabledToggle")?.checked ? 1 : 0;
+  const apiKey = document.getElementById("smbupiApiKeyInput")?.value.trim() || "";
+  const apiSecret = document.getElementById("smbupiApiSecretInput")?.value.trim() || "";
+  const webhookSecret = document.getElementById("smbupiWebhookSecretInput")?.value.trim() || "";
+
+  if (enabled && (!apiKey || !apiSecret)) {
+    alert("⚠️ ଦୟାକରି SMB UPI API Key (pi_live_...) ଏବଂ API Secret (sk_live_...) ଦୁଇଟିଯାକ ପୂରଣ କରନ୍ତୁ!");
+    return;
+  }
+
+  try {
+    const res = await fetch(`/api/shop/${currentShopId}/settings`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        shop_name: currentShop.shop_name,
+        owner_name: currentShop.owner_name,
+        upi_id: currentShop.upi_id,
+        rate_bw: currentShop.rate_bw,
+        rate_double_bw: currentShop.rate_double_bw,
+        rate_color: currentShop.rate_color,
+        rate_double_color: currentShop.rate_double_color,
+        selected_printer: currentShop.selected_printer || "",
+        auto_print_enabled: currentShop.auto_print_enabled,
+        smbupi_api_key: apiKey,
+        smbupi_api_secret: apiSecret,
+        smbupi_webhook_secret: webhookSecret,
+        smbupi_enabled: enabled
+      })
+    });
+    if (res.ok) {
+      alert("✅ SMB UPI (smbupi.com) ସେଟିଙ୍ଗ୍ ସଫଳତାର ସହ ସେଭ୍ ହେଲା!");
+      await loadShopDetails();
+    } else {
+      const err = await res.json();
+      alert("ଭୁଲ୍: " + (err.detail || "Failed to save SMB UPI settings"));
+    }
+  } catch (err) {
+    alert("Error saving SMB UPI settings: " + err.message);
   }
 }
 

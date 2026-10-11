@@ -5,6 +5,9 @@ let selectedPrintSide = "single";
 let selectedCopies = 1;
 let isCustomPages = false;
 let statusPollingInterval = null;
+let paytmPollInterval = null;
+let phonepePollInterval = null;
+let smbupiPollInterval = null;
 
 document.addEventListener("DOMContentLoaded", async () => {
   await initShop();
@@ -342,10 +345,171 @@ async function proceedToPayment() {
       document.getElementById("directUpiPayLink").style.display = "none";
     }
 
+    // Paytm Business 0% Auto-Verification
+    const isPaytm = Boolean(currentJob.is_paytm_auto);
+    const paytmBox = document.getElementById("paytmAutoDetectBox");
+    if (paytmBox) {
+      paytmBox.style.display = isPaytm ? "block" : "none";
+    }
+
+    if (isPaytm) {
+      startPaytmAutoVerification(currentJob.id);
+    } else {
+      if (paytmPollInterval) {
+        clearInterval(paytmPollInterval);
+        paytmPollInterval = null;
+      }
+    }
+
+    // PhonePe Standard Checkout Auto-Verification
+    const isPhonePe = Boolean(currentJob.is_phonepe_auto && currentJob.phonepe_pay_url);
+    const phonepeBox = document.getElementById("phonepeAutoDetectBox");
+    const phonepeBtn = document.getElementById("btnPhonePePay");
+    if (phonepeBox) {
+      phonepeBox.style.display = isPhonePe ? "block" : "none";
+    }
+    if (phonepeBtn && currentJob.phonepe_pay_url) {
+      phonepeBtn.href = currentJob.phonepe_pay_url;
+    }
+
+    if (isPhonePe) {
+      startPhonePeAutoVerification(currentJob.id);
+    } else {
+      if (phonepePollInterval) {
+        clearInterval(phonepePollInterval);
+        phonepePollInterval = null;
+      }
+    }
+
+    // SMB UPI (smbupi.com 0% Fee Gateway) Auto-Verification
+    const isSmbUpi = Boolean(currentJob.is_smbupi_auto && currentJob.smbupi_pay_url);
+    const smbupiBox = document.getElementById("smbupiAutoDetectBox");
+    const smbupiBtn = document.getElementById("btnSmbUpiPay");
+    if (smbupiBox) {
+      smbupiBox.style.display = isSmbUpi ? "block" : "none";
+    }
+    if (smbupiBtn && currentJob.smbupi_pay_url) {
+      smbupiBtn.href = currentJob.smbupi_pay_url;
+    }
+
+    if (isSmbUpi) {
+      startSmbUpiAutoVerification(currentJob.id);
+    } else {
+      if (smbupiPollInterval) {
+        clearInterval(smbupiPollInterval);
+        smbupiPollInterval = null;
+      }
+    }
+
     setStep(3);
   } catch (err) {
     alert("ଭୁଲ୍: " + err.message);
   }
+}
+
+function startSmbUpiAutoVerification(jobId) {
+  if (smbupiPollInterval) clearInterval(smbupiPollInterval);
+
+  smbupiPollInterval = setInterval(async () => {
+    if (!currentJob || currentJob.id !== jobId) {
+      clearInterval(smbupiPollInterval);
+      smbupiPollInterval = null;
+      return;
+    }
+
+    try {
+      const res = await fetch(`/api/customer/jobs/${jobId}/check-smbupi-status`, {
+        method: "POST"
+      });
+      if (!res.ok) return;
+
+      const data = await res.json();
+      if (data.status === "success" || (data.job && data.job.payment_status === "paid")) {
+        clearInterval(smbupiPollInterval);
+        smbupiPollInterval = null;
+
+        currentJob = data.job || currentJob;
+
+        // Auto transition to Step 4
+        setStep(4);
+        document.getElementById("waitingTitle").textContent = "⚡ SMB UPI ପେମେଣ୍ଟ୍ ସଫଳ (0% Verified)!";
+        document.getElementById("waitingDesc").textContent = "UPI ପେମେଣ୍ଟ୍ କନଫର୍ମ ହୋଇଛି! ପ୍ରିଣ୍ଟର୍ ରୁ କାଗଜ ବାହାରୁଛି...";
+        startPollingPrintStatus();
+      }
+    } catch (err) {
+      console.log("SMB UPI auto-verification polling error:", err);
+    }
+  }, 3500);
+}
+
+function startPhonePeAutoVerification(jobId) {
+  if (phonepePollInterval) clearInterval(phonepePollInterval);
+
+  phonepePollInterval = setInterval(async () => {
+    if (!currentJob || currentJob.id !== jobId) {
+      clearInterval(phonepePollInterval);
+      phonepePollInterval = null;
+      return;
+    }
+
+    try {
+      const res = await fetch(`/api/customer/jobs/${jobId}/check-phonepe-status`, {
+        method: "POST"
+      });
+      if (!res.ok) return;
+
+      const data = await res.json();
+      if (data.status === "COMPLETED" || (data.job && data.job.payment_status === "paid")) {
+        clearInterval(phonepePollInterval);
+        phonepePollInterval = null;
+
+        currentJob = data.job || currentJob;
+
+        // Auto transition to Step 4
+        setStep(4);
+        document.getElementById("waitingTitle").textContent = "⚡ PhonePe ପେମେଣ୍ଟ୍ ସଫଳ (Verified)!";
+        document.getElementById("waitingDesc").textContent = "PhonePe Standard Checkout ରୁ ପେମେଣ୍ଟ୍ କନଫର୍ମ ହୋଇଛି! ପ୍ରିଣ୍ଟର୍ ରୁ କାଗଜ ବାହାରୁଛି...";
+        startPollingPrintStatus();
+      }
+    } catch (err) {
+      console.log("PhonePe auto-verification polling error:", err);
+    }
+  }, 3500);
+}
+
+function startPaytmAutoVerification(jobId) {
+  if (paytmPollInterval) clearInterval(paytmPollInterval);
+
+  paytmPollInterval = setInterval(async () => {
+    if (!currentJob || currentJob.id !== jobId) {
+      clearInterval(paytmPollInterval);
+      paytmPollInterval = null;
+      return;
+    }
+
+    try {
+      const res = await fetch(`/api/customer/jobs/${jobId}/check-paytm-status`, {
+        method: "POST"
+      });
+      if (!res.ok) return;
+
+      const data = await res.json();
+      if (data.status === "TXN_SUCCESS" || (data.job && data.job.payment_status === "paid")) {
+        clearInterval(paytmPollInterval);
+        paytmPollInterval = null;
+
+        currentJob = data.job || currentJob;
+
+        // Auto transition to Step 4
+        setStep(4);
+        document.getElementById("waitingTitle").textContent = "⚡ ପେମେଣ୍ଟ୍ ସଫଳ (0% Fee Verified)!";
+        document.getElementById("waitingDesc").textContent = "Paytm Business ସାହାଯ୍ୟରେ ପେମେଣ୍ଟ୍ କନଫର୍ମ ହୋଇଛି! ପ୍ରିଣ୍ଟର୍ ରୁ କାଗଜ ବାହାରୁଛି...";
+        startPollingPrintStatus();
+      }
+    } catch (err) {
+      console.log("Paytm auto-verification polling error:", err);
+    }
+  }, 3500);
 }
 
 function copyUpiId() {
@@ -360,6 +524,18 @@ function copyUpiId() {
 
 async function claimPaymentDone() {
   if (!currentJob) return;
+  if (paytmPollInterval) {
+    clearInterval(paytmPollInterval);
+    paytmPollInterval = null;
+  }
+  if (phonepePollInterval) {
+    clearInterval(phonepePollInterval);
+    phonepePollInterval = null;
+  }
+  if (smbupiPollInterval) {
+    clearInterval(smbupiPollInterval);
+    smbupiPollInterval = null;
+  }
   const btn = document.getElementById("btnClaimPaid");
   btn.disabled = true;
   btn.textContent = "⏳ ଯାଞ୍ଚ ଅନୁରୋଧ ପଠାଯାଉଛି...";
@@ -407,6 +583,18 @@ function startPollingPrintStatus() {
 
 function resetFlow() {
   if (statusPollingInterval) clearInterval(statusPollingInterval);
+  if (paytmPollInterval) {
+    clearInterval(paytmPollInterval);
+    paytmPollInterval = null;
+  }
+  if (phonepePollInterval) {
+    clearInterval(phonepePollInterval);
+    phonepePollInterval = null;
+  }
+  if (smbupiPollInterval) {
+    clearInterval(smbupiPollInterval);
+    smbupiPollInterval = null;
+  }
   currentJob = null;
   document.getElementById("fileInput").value = "";
   document.getElementById("dropzone").style.display = "block";

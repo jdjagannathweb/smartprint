@@ -16,7 +16,12 @@ from pydantic import BaseModel
 
 import database
 from services.printer_service import get_installed_printers, print_pdf, generate_test_page_pdf, SUMATRA_PATH
-from services.payment_service import generate_upi_uri, generate_qr_base64, generate_counter_qr
+from services.payment_service import (
+    generate_upi_uri, generate_paytm_upi_uri, check_paytm_order_status,
+    initiate_phonepe_checkout, check_phonepe_order_status,
+    create_smbupi_order, check_smbupi_order_status,
+    generate_qr_base64, generate_counter_qr
+)
 from services.tunnel_service import start_tunnel_thread, get_public_url
 from services.document_service import process_uploaded_file, parse_page_range, prepare_final_print_pdf, delete_job_files, cleanup_old_uploads
 import threading
@@ -186,6 +191,19 @@ class ShopSettingsUpdate(BaseModel):
     rate_double_color: Optional[float] = 15.0
     selected_printer: str = ""
     auto_print_enabled: Optional[int] = 1
+    paytm_mid: Optional[str] = None
+    paytm_merchant_key: Optional[str] = None
+    paytm_vpa: Optional[str] = None
+    paytm_enabled: Optional[int] = None
+    phonepe_client_id: Optional[str] = None
+    phonepe_client_secret: Optional[str] = None
+    phonepe_client_version: Optional[int] = None
+    phonepe_env: Optional[str] = None
+    phonepe_enabled: Optional[int] = None
+    smbupi_api_key: Optional[str] = None
+    smbupi_api_secret: Optional[str] = None
+    smbupi_webhook_secret: Optional[str] = None
+    smbupi_enabled: Optional[int] = None
 
 @app.post("/api/shop/{shop_id}/settings")
 def update_shop_config(shop_id: str, body: ShopSettingsUpdate):
@@ -199,10 +217,23 @@ def update_shop_config(shop_id: str, body: ShopSettingsUpdate):
         "upi_id": body.upi_id,
         "rate_bw": body.rate_bw,
         "rate_color": body.rate_color,
-        "rate_double_bw": body.rate_double_bw if body.rate_double_bw is not None else 3.0,
-        "rate_double_color": body.rate_double_color if body.rate_double_color is not None else 15.0,
-        "selected_printer": body.selected_printer,
-        "auto_print_enabled": body.auto_print_enabled if body.auto_print_enabled is not None else 1
+        "rate_double_bw": body.rate_double_bw if body.rate_double_bw is not None else shop.get("rate_double_bw", 3.0),
+        "rate_double_color": body.rate_double_color if body.rate_double_color is not None else shop.get("rate_double_color", 15.0),
+        "selected_printer": body.selected_printer if body.selected_printer is not None else shop.get("selected_printer", ""),
+        "auto_print_enabled": body.auto_print_enabled if body.auto_print_enabled is not None else shop.get("auto_print_enabled", 1),
+        "paytm_mid": (body.paytm_mid if body.paytm_mid is not None else shop.get("paytm_mid", "")).strip(),
+        "paytm_merchant_key": (body.paytm_merchant_key if body.paytm_merchant_key is not None else shop.get("paytm_merchant_key", "")).strip(),
+        "paytm_vpa": (body.paytm_vpa if body.paytm_vpa is not None else shop.get("paytm_vpa", "")).strip(),
+        "paytm_enabled": int(body.paytm_enabled) if body.paytm_enabled is not None else int(shop.get("paytm_enabled", 0)),
+        "phonepe_client_id": (body.phonepe_client_id if body.phonepe_client_id is not None else shop.get("phonepe_client_id", "")).strip(),
+        "phonepe_client_secret": (body.phonepe_client_secret if body.phonepe_client_secret is not None else shop.get("phonepe_client_secret", "")).strip(),
+        "phonepe_client_version": int(body.phonepe_client_version) if body.phonepe_client_version is not None else int(shop.get("phonepe_client_version", 1)),
+        "phonepe_env": (body.phonepe_env if body.phonepe_env is not None else shop.get("phonepe_env", "PRODUCTION")).strip(),
+        "phonepe_enabled": int(body.phonepe_enabled) if body.phonepe_enabled is not None else int(shop.get("phonepe_enabled", 0)),
+        "smbupi_api_key": (body.smbupi_api_key if body.smbupi_api_key is not None else shop.get("smbupi_api_key", "")).strip(),
+        "smbupi_api_secret": (body.smbupi_api_secret if body.smbupi_api_secret is not None else shop.get("smbupi_api_secret", "")).strip(),
+        "smbupi_webhook_secret": (body.smbupi_webhook_secret if body.smbupi_webhook_secret is not None else shop.get("smbupi_webhook_secret", "")).strip(),
+        "smbupi_enabled": int(body.smbupi_enabled) if body.smbupi_enabled is not None else int(shop.get("smbupi_enabled", 0))
     })
     return {"success": True, "shop": updated}
 
@@ -249,7 +280,10 @@ def get_customer_shop_info(slug: str):
         "upi_id": shop["upi_id"],
         "shop_qr_image": shop["shop_qr_image"],
         "is_active": bool(shop["is_active"]),
-        "subscription_valid": is_valid
+        "subscription_valid": is_valid,
+        "paytm_enabled": bool(shop.get("paytm_enabled") and shop.get("paytm_vpa")),
+        "phonepe_enabled": bool(shop.get("phonepe_enabled") and shop.get("phonepe_client_id") and shop.get("phonepe_client_secret")),
+        "smbupi_enabled": bool(shop.get("smbupi_enabled") and shop.get("smbupi_api_key") and shop.get("smbupi_api_secret"))
     }
 
 @app.post("/api/customer/upload")
@@ -268,12 +302,21 @@ async def customer_upload(shop_id: str = Form(...), file: UploadFile = File(...)
     rate = float(shop.get("rate_bw", 2.0))
     total = rate * job["total_pages"]
     
-    upi_uri = generate_upi_uri(
-        upi_id=shop.get("upi_id") or "merchant@upi",
-        merchant_name=shop.get("shop_name", "Print"),
-        amount=total,
-        order_id=job["id"]
-    )
+    is_paytm_auto = bool(shop.get("paytm_enabled") and shop.get("paytm_mid") and shop.get("paytm_merchant_key") and shop.get("paytm_vpa"))
+    if is_paytm_auto:
+        upi_uri = generate_paytm_upi_uri(
+            paytm_vpa=shop["paytm_vpa"],
+            merchant_name=shop.get("shop_name", "Print"),
+            amount=total,
+            order_id=job["id"]
+        )
+    else:
+        upi_uri = generate_upi_uri(
+            upi_id=shop.get("upi_id") or "merchant@upi",
+            merchant_name=shop.get("shop_name", "Print"),
+            amount=total,
+            order_id=job["id"]
+        )
     qr_b64 = generate_qr_base64(upi_uri)
     
     # Save job in database
@@ -302,7 +345,8 @@ async def customer_upload(shop_id: str = Form(...), file: UploadFile = File(...)
         "qr_code": qr_b64,
         "qr_code_base64": qr_b64,
         "shop_qr_image": shop.get("shop_qr_image", ""),
-        "upi_id": shop.get("upi_id", "")
+        "upi_id": (shop.get("paytm_vpa") if is_paytm_auto else shop.get("upi_id")) or "",
+        "is_paytm_auto": is_paytm_auto
     }
 
 class CustomerConfigureRequest(BaseModel):
@@ -343,13 +387,56 @@ def customer_configure_job(job_id: str, body: CustomerConfigureRequest):
         total_amount = round(num_pages * copies * rate_single, 2)
         rate_per_page = rate_single
     
-    upi_uri = generate_upi_uri(
-        upi_id=shop.get("upi_id") or "merchant@upi",
-        merchant_name=shop.get("shop_name", "Print"),
-        amount=total_amount,
-        order_id=job_id
-    )
+    is_paytm_auto = bool(shop.get("paytm_enabled") and shop.get("paytm_mid") and shop.get("paytm_merchant_key") and shop.get("paytm_vpa"))
+    if is_paytm_auto:
+        upi_uri = generate_paytm_upi_uri(
+            paytm_vpa=shop["paytm_vpa"],
+            merchant_name=shop.get("shop_name", "Print"),
+            amount=total_amount,
+            order_id=job_id
+        )
+    else:
+        upi_uri = generate_upi_uri(
+            upi_id=shop.get("upi_id") or "merchant@upi",
+            merchant_name=shop.get("shop_name", "Print"),
+            amount=total_amount,
+            order_id=job_id
+        )
     qr_b64 = generate_qr_base64(upi_uri)
+
+    # PhonePe Standard Checkout session
+    is_phonepe_auto = bool(shop.get("phonepe_enabled") and shop.get("phonepe_client_id") and shop.get("phonepe_client_secret"))
+    phonepe_pay_url = ""
+    if is_phonepe_auto:
+        phonepe_res = initiate_phonepe_checkout(
+            client_id=shop["phonepe_client_id"],
+            client_secret=shop["phonepe_client_secret"],
+            client_version=shop.get("phonepe_client_version", 1),
+            env_str=shop.get("phonepe_env", "PRODUCTION"),
+            amount=total_amount,
+            order_id=job_id,
+            redirect_url=f"/s/{shop['slug']}?job={job_id}&paid=1"
+        )
+        if phonepe_res.get("success"):
+            phonepe_pay_url = phonepe_res.get("redirect_url", "")
+
+    # SMB UPI (smbupi.com 0% fee gateway) order session
+    is_smbupi_auto = bool(shop.get("smbupi_enabled") and shop.get("smbupi_api_key") and shop.get("smbupi_api_secret"))
+    smbupi_pay_url = ""
+    if is_smbupi_auto:
+        base_url = get_base_url()
+        callback_url = f"{base_url}/s/{shop['slug']}?job={job_id}&smbpaid=1"
+        smb_res = create_smbupi_order(
+            api_key=shop["smbupi_api_key"],
+            api_secret=shop["smbupi_api_secret"],
+            amount=total_amount,
+            order_id=job_id,
+            callback_url=callback_url,
+            customer_name="Customer",
+            description=f"Print {shop.get('shop_name', 'Order')} #{job_id[:6]}"
+        )
+        if smb_res.get("success"):
+            smbupi_pay_url = smb_res.get("payment_url", "")
     
     updated = database.update_job_status(job_id, {
         "num_pages_to_print": num_pages,
@@ -357,7 +444,10 @@ def customer_configure_job(job_id: str, body: CustomerConfigureRequest):
         "color_mode": color_mode,
         "print_side": print_side,
         "rate_per_page": rate_per_page,
-        "total_amount": total_amount
+        "total_amount": total_amount,
+        "phonepe_order_id": job_id,
+        "phonepe_redirect_url": phonepe_pay_url,
+        "smbupi_payment_url": smbupi_pay_url
     })
     
     return {
@@ -367,8 +457,238 @@ def customer_configure_job(job_id: str, body: CustomerConfigureRequest):
         "qr_code": qr_b64,
         "qr_code_base64": qr_b64,
         "shop_qr_image": shop.get("shop_qr_image", ""),
-        "upi_id": shop.get("upi_id", "")
+        "upi_id": (shop.get("paytm_vpa") if is_paytm_auto else shop.get("upi_id")) or "",
+        "is_paytm_auto": is_paytm_auto,
+        "is_phonepe_auto": is_phonepe_auto,
+        "phonepe_pay_url": phonepe_pay_url,
+        "is_smbupi_auto": is_smbupi_auto,
+        "smbupi_pay_url": smbupi_pay_url
     }
+
+@app.post("/api/customer/jobs/{job_id}/check-phonepe-status")
+def customer_check_phonepe_status(job_id: str, background_tasks: BackgroundTasks):
+    job = database.get_job(job_id)
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found")
+    
+    if job.get("payment_status") == "paid":
+        return {"success": True, "status": "COMPLETED", "job": job}
+    
+    shop = database.get_shop_by_id(job["shop_id"])
+    if not shop or not shop.get("phonepe_enabled") or not shop.get("phonepe_client_id") or not shop.get("phonepe_client_secret"):
+        return {"success": False, "status": "NOT_CONFIGURED", "message": "PhonePe Standard Checkout is not enabled for this shop"}
+    
+    res = check_phonepe_order_status(
+        client_id=shop["phonepe_client_id"],
+        client_secret=shop["phonepe_client_secret"],
+        client_version=shop.get("phonepe_client_version", 1),
+        env_str=shop.get("phonepe_env", "PRODUCTION"),
+        order_id=job_id
+    )
+    
+    if res.get("success") and res.get("status") == "COMPLETED":
+        updated = database.update_job_status(job_id, {
+            "payment_status": "paid",
+            "print_status": "printing",
+            "phonepe_order_id": res.get("order_id", job_id)
+        })
+        background_tasks.add_task(trigger_print_execution, job_id)
+        return {"success": True, "status": "COMPLETED", "job": updated, "order_id": res.get("order_id")}
+    
+    return {"success": False, "status": res.get("status", "PENDING"), "message": res.get("message", "")}
+
+@app.post("/api/customer/jobs/{job_id}/check-paytm-status")
+def customer_check_paytm_status(job_id: str, background_tasks: BackgroundTasks):
+    job = database.get_job(job_id)
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found")
+    
+    if job.get("payment_status") == "paid":
+        return {"success": True, "status": "TXN_SUCCESS", "job": job}
+    
+    shop = database.get_shop_by_id(job["shop_id"])
+    if not shop or not shop.get("paytm_enabled") or not shop.get("paytm_mid") or not shop.get("paytm_merchant_key"):
+        return {"success": False, "status": "NOT_CONFIGURED", "message": "Paytm Business is not enabled for this shop"}
+    
+    res = check_paytm_order_status(
+        mid=shop["paytm_mid"],
+        merchant_key=shop["paytm_merchant_key"],
+        order_id=job_id
+    )
+    
+    if res.get("success") and res.get("status") == "TXN_SUCCESS":
+        updated = database.update_job_status(job_id, {
+            "payment_status": "paid",
+            "print_status": "printing",
+            "paytm_txn_id": res.get("txn_id", "")
+        })
+        background_tasks.add_task(trigger_print_execution, job_id)
+        return {"success": True, "status": "TXN_SUCCESS", "job": updated, "txn_id": res.get("txn_id")}
+    
+    return {"success": False, "status": res.get("status", "PENDING"), "message": res.get("message", "")}
+
+@app.post("/api/customer/jobs/{job_id}/check-smbupi-status")
+def customer_check_smbupi_status(job_id: str, background_tasks: BackgroundTasks):
+    job = database.get_job(job_id)
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found")
+    
+    if job.get("payment_status") == "paid":
+        return {"success": True, "status": "success", "job": job}
+    
+    shop = database.get_shop_by_id(job["shop_id"])
+    if not shop or not shop.get("smbupi_enabled") or not shop.get("smbupi_api_key") or not shop.get("smbupi_api_secret"):
+        return {"success": False, "status": "not_configured", "message": "SMB UPI Gateway is not enabled for this shop"}
+    
+    res = check_smbupi_order_status(
+        api_key=shop["smbupi_api_key"],
+        api_secret=shop["smbupi_api_secret"],
+        order_id=job_id
+    )
+    
+    if res.get("success") and res.get("status") == "success":
+        updated = database.update_job_status(job_id, {
+            "payment_status": "paid",
+            "print_status": "printing"
+        })
+        background_tasks.add_task(trigger_print_execution, job_id)
+        return {"success": True, "status": "success", "job": updated, "utr": res.get("utr", "")}
+    
+    return {"success": False, "status": res.get("status", "pending"), "message": res.get("error", "")}
+
+# ==================== PAYMENT WEBHOOKS (PHONEPE, PAYTM & SMBUPI) ====================
+
+@app.post("/api/webhooks/phonepe")
+async def phonepe_webhook_handler(request: Request, background_tasks: BackgroundTasks):
+    """
+    Receives instant payment notifications from PhonePe.
+    Triggers automated print execution immediately when payment is confirmed.
+    """
+    try:
+        body_bytes = await request.body()
+        if not body_bytes:
+            return {"status": "SUCCESS", "message": "Empty body acknowledged"}
+        
+        try:
+            payload = json.loads(body_bytes.decode("utf-8"))
+        except Exception:
+            payload = {}
+        
+        # If response is Base64 encoded (Standard PhonePe pattern)
+        if "response" in payload and isinstance(payload["response"], str):
+            try:
+                decoded = base64.b64decode(payload["response"]).decode("utf-8")
+                payload = json.loads(decoded)
+            except Exception:
+                pass
+        
+        order_id = ""
+        state = ""
+        
+        if "payload" in payload and isinstance(payload["payload"], dict):
+            p = payload["payload"]
+            order_id = p.get("merchantOrderId") or p.get("orderId") or ""
+            state = (p.get("state") or "").upper()
+        elif "data" in payload and isinstance(payload["data"], dict):
+            d = payload["data"]
+            order_id = d.get("merchantTransactionId") or d.get("merchantOrderId") or d.get("orderId") or ""
+            state = (d.get("state") or d.get("responseCode") or payload.get("code") or "").upper()
+        else:
+            order_id = payload.get("merchantOrderId") or payload.get("merchantTransactionId") or payload.get("orderId") or ""
+            state = (payload.get("state") or payload.get("code") or "").upper()
+        
+        is_success = state in ["COMPLETED", "SUCCESS", "PAYMENT_SUCCESS"]
+        
+        if order_id:
+            job = database.get_job(order_id)
+            if job and is_success and job.get("payment_status") != "paid":
+                database.update_job_status(order_id, {
+                    "payment_status": "paid",
+                    "print_status": "printing"
+                })
+                background_tasks.add_task(trigger_print_execution, order_id)
+                print(f"[PHONEPE WEBHOOK] Successfully verified order {order_id}. Printing triggered!")
+        
+        return {"status": "SUCCESS", "message": "Webhook processed successfully"}
+    except Exception as e:
+        print(f"[PHONEPE WEBHOOK ERROR] {e}")
+        return {"status": "SUCCESS", "message": str(e)}
+
+@app.post("/api/webhooks/paytm")
+async def paytm_webhook_handler(request: Request, background_tasks: BackgroundTasks):
+    """
+    Receives instant payment notifications from Paytm Business.
+    Triggers automated print execution immediately when payment is confirmed.
+    """
+    try:
+        content_type = request.headers.get("content-type", "")
+        data = {}
+        if "application/json" in content_type:
+            data = await request.json()
+        else:
+            form = await request.form()
+            data = dict(form)
+        
+        order_id = data.get("ORDERID") or data.get("orderId") or ""
+        status = (data.get("STATUS") or data.get("status") or "").upper()
+        
+        if order_id and status in ["TXN_SUCCESS", "SUCCESS"]:
+            job = database.get_job(order_id)
+            if job and job.get("payment_status") != "paid":
+                database.update_job_status(order_id, {
+                    "payment_status": "paid",
+                    "print_status": "printing",
+                    "paytm_txn_id": data.get("TXNID", "")
+                })
+                background_tasks.add_task(trigger_print_execution, order_id)
+                print(f"[PAYTM WEBHOOK] Successfully verified order {order_id}. Printing triggered!")
+        
+        return {"status": "SUCCESS", "message": "Paytm webhook processed"}
+    except Exception as e:
+        print(f"[PAYTM WEBHOOK ERROR] {e}")
+        return {"status": "SUCCESS", "message": str(e)}
+
+@app.post("/api/webhooks/smbupi")
+async def smbupi_webhook_handler(request: Request, background_tasks: BackgroundTasks):
+    """
+    Receives instant payment notifications from SMB UPI (smbupi.com).
+    Triggers automated print execution immediately when payment is confirmed.
+    """
+    try:
+        body_bytes = await request.body()
+        if not body_bytes:
+            return {"status": "SUCCESS", "message": "Empty body acknowledged"}
+        
+        try:
+            payload = json.loads(body_bytes.decode("utf-8"))
+        except Exception:
+            payload = {}
+        
+        order_id = payload.get("order_id") or payload.get("orderId") or ""
+        if not order_id and "data" in payload and isinstance(payload["data"], dict):
+            order_id = payload["data"].get("order_id") or payload["data"].get("orderId") or ""
+        
+        status = (payload.get("status") or payload.get("payment_status") or "").lower()
+        if not status and "data" in payload and isinstance(payload["data"], dict):
+            status = (payload["data"].get("payment_status") or payload["data"].get("status") or "").lower()
+        
+        event = (payload.get("event") or "").lower()
+        is_success = (status == "success" or event in ["payment.success", "order.paid", "success"])
+        
+        if order_id and is_success:
+            job = database.get_job(order_id)
+            if job and job.get("payment_status") != "paid":
+                database.update_job_status(order_id, {
+                    "payment_status": "paid",
+                    "print_status": "printing"
+                })
+                background_tasks.add_task(trigger_print_execution, order_id)
+                print(f"[SMBUPI WEBHOOK] Successfully verified order {order_id}. Printing triggered!")
+        
+        return {"status": "SUCCESS", "message": "SMB UPI webhook processed"}
+    except Exception as e:
+        print(f"[SMBUPI WEBHOOK ERROR] {e}")
+        return {"status": "SUCCESS", "message": str(e)}
 
 @app.get("/api/customer/jobs/{job_id}/status")
 def customer_get_status(job_id: str):

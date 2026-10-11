@@ -373,6 +373,208 @@
           <button class="btn btn-outline" onclick="uploadStandeeImage()">📤 ଫଟୋ ଅପଲୋଡ୍ କରନ୍ତୁ</button>
         </div>
       </div>
+
+      <!-- PAYTM FOR BUSINESS 0% CHARGE AUTO-VERIFICATION CARD -->
+      <div class="card" style="max-width: 600px; border: 2px solid #0284c7; background: linear-gradient(135deg, #f0f9ff 0%, #ffffff 100%); margin-top: 24px; box-shadow: 0 4px 14px rgba(2, 132, 199, 0.08);">
+        <div style="display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-bottom: 14px;">
+          <div style="display: flex; align-items: center; gap: 10px;">
+            <span style="font-size: 2.2rem;">⚡</span>
+            <div>
+              <h3 style="margin: 0; color: #0369a1; font-size: 1.15rem;">Paytm for Business (0% Charge Auto-Verification)</h3>
+              <span style="font-size: 0.78rem; background: #e0f2fe; color: #0369a1; padding: 2px 8px; border-radius: 999px; font-weight: 700;">
+                0% Transaction Fee | Instant Bank Settlement
+              </span>
+            </div>
+          </div>
+          <div style="display: flex; align-items: center; gap: 8px; background: #ffffff; padding: 6px 12px; border-radius: 10px; border: 1.5px solid #bae6fd;">
+            <input type="checkbox" id="paytmEnabledToggle" style="width: 20px; height: 20px; cursor: pointer; accent-color: #0284c7;">
+            <label for="paytmEnabledToggle" style="font-weight: 700; color: #0369a1; cursor: pointer; font-size: 0.9rem; margin: 0;">Auto-Verify Active</label>
+          </div>
+        </div>
+
+        <p style="color: #334155; font-size: 0.88rem; line-height: 1.6; margin-bottom: 16px;">
+          ଏହା ସକ୍ରିୟ (Active) କଲେ, ଗ୍ରାହକ PhonePe, Google Pay, Paytm କିମ୍ବା ଯେକୌଣସି UPI ଆପ୍ ରୁ QR କୋଡ୍ ସ୍କାନ୍ କରି ପେ କଲେ <b>Paytm Merchant API ସିଧା ୩ ସେକେଣ୍ଡ୍ ରେ ଆପେ ଆପେ ପେମେଣ୍ଟ୍ କନଫର୍ମ କରି କାଗଜ ପ୍ରିଣ୍ଟ୍ ବାହାର କରିଦେବ</b>। କୌଣସି କମିଶନ୍ (0% Charge) କଟିବ ନାହିଁ!
+        </p>
+
+        <div style="background: #ffffff; border: 1.5px solid #e2e8f0; border-radius: 12px; padding: 18px; margin-bottom: 18px;">
+          <div class="form-group" style="margin-bottom: 14px;">
+            <label style="font-weight: 700; font-size: 0.86rem; color: #1e293b;">Paytm Merchant ID (MID) *</label>
+            <input type="text" id="paytmMidInput" class="form-control" placeholder="ଉଦାହରଣ: YOUR_PAYTM_MID_HERE" style="font-family: monospace; font-weight: 600;">
+            <span style="font-size: 0.75rem; color: #64748b;">Paytm Business Dashboard ର Production Merchant ID</span>
+          </div>
+
+          <div class="form-group" style="margin-bottom: 14px;">
+            <label style="font-weight: 700; font-size: 0.86rem; color: #1e293b;">Paytm Merchant Key *</label>
+            <div style="display: flex; gap: 6px;">
+              <input type="password" id="paytmKeyInput" class="form-control" placeholder="Paytm Production Merchant Key" style="font-family: monospace; font-weight: 600;">
+              <button type="button" class="btn btn-sm btn-outline" onclick="togglePaytmKeyVisibility()" style="white-space: nowrap; font-size: 0.8rem;">👁️ Show</button>
+            </div>
+            <span style="font-size: 0.75rem; color: #64748b;">Paytm API Keys ସେକ୍ସନରେ ଥିବା Production Secret Merchant Key</span>
+          </div>
+
+          <div class="form-group" style="margin-bottom: 0;">
+            <label style="font-weight: 700; font-size: 0.86rem; color: #1e293b;">Paytm UPI VPA (Merchant UPI ID) *</label>
+            <input type="text" id="paytmVpaInput" class="form-control" placeholder="ଉଦାହରଣ: paytm.s1i21ie@pty କିମ୍ବା yourname@paytm" style="font-family: monospace; font-weight: 600;">
+            <span style="font-size: 0.75rem; color: #64748b;">ଏହି UPI ID ରେ ଟଙ୍କା ସିଧା ଆପଣଙ୍କ Paytm Business ବ୍ୟାଙ୍କ ଖାତାରେ ଜମା ହେବ</span>
+          </div>
+        </div>
+
+        <!-- HOW TO GET MID GUIDE -->
+        <div style="background: #f8fafc; border: 1px dashed #94a3b8; border-radius: 10px; padding: 12px 16px; margin-bottom: 18px; font-size: 0.82rem; color: #475569; line-height: 1.5;">
+          <b style="color: #0f172a;">📌 Paytm MID ଏବଂ Key କିପରି ପାଇବେ:</b>
+          <ol style="margin: 6px 0 0 18px; padding: 0;">
+            <li>ନିଜ ମୋବାଇଲ୍ କିମ୍ବା PC ରେ <b>business.paytm.com</b> ଖୋଲି ଲଗଇନ୍ କରନ୍ତୁ।</li>
+            <li>ବାମ ପାଖ ମେନୁରୁ <b>Developer Settings</b> ➡️ <b>API Keys</b> କୁ ଯାଆନ୍ତୁ।</li>
+            <li>ସେଠାରୁ <b>Production Merchant ID (MID)</b> ଏବଂ <b>Merchant Key</b> କପି କରି ଏଠାରେ ପେଷ୍ଟ୍ କରନ୍ତୁ।</li>
+          </ol>
+        </div>
+
+        <button class="btn btn-primary" onclick="savePaytmSettings()" style="background: #0284c7; border-color: #0284c7;">
+          💾 Paytm Business ସେଟିଙ୍ଗ୍ ସେଭ୍ କରନ୍ତୁ
+        </button>
+      </div>
+
+      <!-- PHONEPE STANDARD CHECKOUT (DEVELOPER API) CARD -->
+      <div class="card" style="max-width: 600px; border: 2px solid #7c3aed; background: linear-gradient(135deg, #f5f3ff 0%, #ffffff 100%); margin-top: 24px; box-shadow: 0 4px 14px rgba(124, 58, 237, 0.08);">
+        <div style="display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-bottom: 14px;">
+          <div style="display: flex; align-items: center; gap: 10px;">
+            <span style="font-size: 2.2rem;">🟣</span>
+            <div>
+              <h3 style="margin: 0; color: #5b21b6; font-size: 1.15rem;">PhonePe Standard Checkout (Developer API)</h3>
+              <span style="font-size: 0.78rem; background: #ede9fe; color: #6d28d9; padding: 2px 8px; border-radius: 999px; font-weight: 700;">
+                Official PhonePe PG V2 Integration
+              </span>
+            </div>
+          </div>
+          <div style="display: flex; align-items: center; gap: 8px; background: #ffffff; padding: 6px 12px; border-radius: 10px; border: 1.5px solid #ddd6fe;">
+            <input type="checkbox" id="phonepeEnabledToggle" style="width: 20px; height: 20px; cursor: pointer; accent-color: #7c3aed;">
+            <label for="phonepeEnabledToggle" style="font-weight: 700; color: #5b21b6; cursor: pointer; font-size: 0.9rem; margin: 0;">Auto-Verify Active</label>
+          </div>
+        </div>
+
+        <p style="color: #334155; font-size: 0.88rem; line-height: 1.6; margin-bottom: 16px;">
+          PhonePe Business Developer Settings ର <b>Client ID</b> ଏବଂ <b>Client Secret</b> ଏଠାରେ ଦିଅନ୍ତୁ। ଗ୍ରାହକ PhonePe ରେ ପେମେଣ୍ଟ୍ କରିବା ମାତ୍ରେ ସିଷ୍ଟମ୍ PhonePe API ରୁ <b>ସ୍ୱୟଂଚାଳିତ ଭାବେ କନଫର୍ମ କରି କାଗଜ ପ୍ରିଣ୍ଟ୍ ବାହାର କରିଦେବ</b>।
+        </p>
+
+        <div style="background: #ffffff; border: 1.5px solid #e2e8f0; border-radius: 12px; padding: 18px; margin-bottom: 18px;">
+          <div class="form-group" style="margin-bottom: 14px;">
+            <label style="font-weight: 700; font-size: 0.86rem; color: #1e293b;">PhonePe Client ID *</label>
+            <input type="text" id="phonepeClientIdInput" class="form-control" placeholder="PhonePe Client ID" style="font-family: monospace; font-weight: 600;">
+            <span style="font-size: 0.75rem; color: #64748b;">PhonePe Business Dashboard -> Developer Settings ର Client ID</span>
+          </div>
+
+          <div class="form-group" style="margin-bottom: 14px;">
+            <label style="font-weight: 700; font-size: 0.86rem; color: #1e293b;">PhonePe Client Secret *</label>
+            <div style="display: flex; gap: 6px;">
+              <input type="password" id="phonepeClientSecretInput" class="form-control" placeholder="PhonePe Client Secret" style="font-family: monospace; font-weight: 600;">
+              <button type="button" class="btn btn-sm btn-outline" onclick="togglePhonePeSecretVisibility()" style="white-space: nowrap; font-size: 0.8rem;">👁️ Show</button>
+            </div>
+            <span style="font-size: 0.75rem; color: #64748b;">PhonePe API Keys ସେକ୍ସନରେ ଥିବା Client Secret</span>
+          </div>
+
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+            <div class="form-group" style="margin-bottom: 0;">
+              <label style="font-weight: 700; font-size: 0.86rem; color: #1e293b;">Client Version</label>
+              <input type="number" id="phonepeClientVersionInput" class="form-control" value="1" min="1" style="font-family: monospace; font-weight: 600;">
+            </div>
+            <div class="form-group" style="margin-bottom: 0;">
+              <label style="font-weight: 700; font-size: 0.86rem; color: #1e293b;">Environment</label>
+              <select id="phonepeEnvSelect" class="form-control" style="font-weight: 600;">
+                <option value="PRODUCTION">PRODUCTION (Live)</option>
+                <option value="SANDBOX">SANDBOX (Testing / UAT)</option>
+              </select>
+            </div>
+          </div>
+        </div>
+
+        <!-- HOW TO GET PHONEPE KEYS GUIDE -->
+        <div style="background: #f8fafc; border: 1px dashed #94a3b8; border-radius: 10px; padding: 12px 16px; margin-bottom: 18px; font-size: 0.82rem; color: #475569; line-height: 1.5;">
+          <b style="color: #0f172a;">📌 PhonePe Client ID ଏବଂ Secret କିପରି ପାଇବେ:</b>
+          <ol style="margin: 6px 0 0 18px; padding: 0;">
+            <li>ନିଜ ମୋବାଇଲ୍ ବା PC ରେ <b>business.phonepe.com</b> ଖୋଲି ଲଗଇନ୍ କରନ୍ତୁ।</li>
+            <li>ବାମ ପାଖ ମେନୁରୁ <b>Developer Settings</b> ➡️ <b>API Keys</b> କୁ ଯାଆନ୍ତୁ।</li>
+            <li>ସେଠାରୁ <b>Client ID</b> ଏବଂ <b>Client Secret</b> କପି କରି ଏଠାରେ ପେଷ୍ଟ୍ କରନ୍ତୁ।</li>
+          </ol>
+        </div>
+
+        <button class="btn btn-primary" onclick="savePhonePeSettings()" style="background: #7c3aed; border-color: #7c3aed;">
+          💾 PhonePe Settings ସେଭ୍ କରନ୍ତୁ
+        </button>
+      </div>
+
+      <!-- SMBUPI.COM 0% FEE UPI GATEWAY CARD -->
+      <div class="card" style="max-width: 600px; border: 2px solid #059669; background: linear-gradient(135deg, #ecfdf5 0%, #ffffff 100%); margin-top: 24px; box-shadow: 0 4px 14px rgba(5, 150, 105, 0.08);">
+        <div style="display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-bottom: 14px;">
+          <div style="display: flex; align-items: center; gap: 10px;">
+            <span style="font-size: 2.2rem;">🟢</span>
+            <div>
+              <h3 style="margin: 0; color: #065f46; font-size: 1.15rem;">SMB UPI (smbupi.com 0% Fee Gateway)</h3>
+              <span style="font-size: 0.78rem; background: #d1fae5; color: #065f46; padding: 2px 8px; border-radius: 999px; font-weight: 700;">
+                0% Transaction Fee | Direct UPI Bank Settlement
+              </span>
+            </div>
+          </div>
+          <div style="display: flex; align-items: center; gap: 8px; background: #ffffff; padding: 6px 12px; border-radius: 10px; border: 1.5px solid #a7f3d0;">
+            <input type="checkbox" id="smbupiEnabledToggle" style="width: 20px; height: 20px; cursor: pointer; accent-color: #059669;">
+            <label for="smbupiEnabledToggle" style="font-weight: 700; color: #065f46; cursor: pointer; font-size: 0.9rem; margin: 0;">Auto-Verify Active</label>
+          </div>
+        </div>
+
+        <p style="color: #334155; font-size: 0.88rem; line-height: 1.6; margin-bottom: 16px;">
+          <b>smbupi.com</b> ର API Key ଏବଂ API Secret ଏଠାରେ ଦିଅନ୍ତୁ। ଏହା ଦ୍ୱାରା ଗ୍ରାହକ ଅର୍ଡର୍ କରିବା ମାତ୍ରେ ଡାଇନାମିକ୍ UPI ଲିଙ୍କ୍ ତିଆରି ହେବ ଏବଂ ଟଙ୍କା ପେମେଣ୍ଟ୍ ହେବା ମାତ୍ରେ <b>୩ ସେକେଣ୍ଡ୍ ରେ ଆପେ ଆପେ କାଗଜ ପ୍ରିଣ୍ଟ୍ ହୋଇଯିବ (0% କମିଶନ୍)</b>!
+        </p>
+
+        <div style="background: #ffffff; border: 1.5px solid #e2e8f0; border-radius: 12px; padding: 18px; margin-bottom: 18px;">
+          <div class="form-group" style="margin-bottom: 14px;">
+            <label style="font-weight: 700; font-size: 0.86rem; color: #1e293b;">SMB UPI API Key (Public Key) *</label>
+            <input type="text" id="smbupiApiKeyInput" class="form-control" placeholder="ଉଦାହରଣ: pi_live_xxxxxxxxxxxx" style="font-family: monospace; font-weight: 600;">
+            <span style="font-size: 0.75rem; color: #64748b;">smbupi.com Dashboard ରେ ମିଳିବାକୁ ଥିବା X-API-Key</span>
+          </div>
+
+          <div class="form-group" style="margin-bottom: 14px;">
+            <label style="font-weight: 700; font-size: 0.86rem; color: #1e293b;">SMB UPI API Secret (Secret Key) *</label>
+            <div style="display: flex; gap: 6px;">
+              <input type="password" id="smbupiApiSecretInput" class="form-control" placeholder="sk_live_xxxxxxxxxxxx" style="font-family: monospace; font-weight: 600;">
+              <button type="button" class="btn btn-sm btn-outline" onclick="toggleSmbUpiSecretVisibility()" style="white-space: nowrap; font-size: 0.8rem;">👁️ Show</button>
+            </div>
+            <span style="font-size: 0.75rem; color: #64748b;">smbupi.com Dashboard ରେ ମିଳିବାକୁ ଥିବା X-API-Secret</span>
+          </div>
+
+          <div class="form-group" style="margin-bottom: 14px;">
+            <label style="font-weight: 700; font-size: 0.86rem; color: #1e293b;">Webhook Secret (Optional)</label>
+            <input type="text" id="smbupiWebhookSecretInput" class="form-control" placeholder="smbupi webhook secret" style="font-family: monospace; font-weight: 600;">
+            <span style="font-size: 0.75rem; color: #64748b;">Webhook signature verify କରିବା ପାଇଁ (Optional)</span>
+          </div>
+
+          <!-- WEBHOOK URL TO COPY -->
+          <div style="background: #f0fdf4; border: 1.5px dashed #86efac; border-radius: 10px; padding: 12px 14px; margin-top: 14px;">
+            <label style="font-weight: 700; font-size: 0.82rem; color: #166534; display: block; margin-bottom: 4px;">
+              🔗 ଆପଣଙ୍କ Webhook Callback URL (smbupi.com ରେ Paste କରନ୍ତୁ):
+            </label>
+            <div style="display: flex; gap: 8px; align-items: center;">
+              <input type="text" id="dispSmbWebhookUrl" readonly class="form-control" style="font-family: monospace; font-size: 0.82rem; background: #fff; font-weight: 600; color: #0f172a;" value="https://smartprint-xvt8.onrender.com/api/webhooks/smbupi">
+              <button type="button" class="btn btn-sm btn-outline" onclick="copySmbWebhookUrl()" style="white-space: nowrap; font-size: 0.8rem; font-weight: 700;">📋 Copy</button>
+            </div>
+            <span style="font-size: 0.74rem; color: #15803d; margin-top: 4px; display: block;">
+              ଏହି URL କୁ smbupi.com Dashboard ➡️ Webhooks ରେ Paste କରିଦିଅନ୍ତୁ।
+            </span>
+          </div>
+        </div>
+
+        <!-- HOW TO GET SMBUPI KEYS GUIDE -->
+        <div style="background: #f8fafc; border: 1px dashed #94a3b8; border-radius: 10px; padding: 12px 16px; margin-bottom: 18px; font-size: 0.82rem; color: #475569; line-height: 1.5;">
+          <b style="color: #0f172a;">📌 smbupi.com କିପରି ସେଟଅପ୍ କରିବେ:</b>
+          <ol style="margin: 6px 0 0 18px; padding: 0;">
+            <li><b>smbupi.com</b> ରେ ଆକାଉଣ୍ଟ୍ ଖୋଲି ଲଗଇନ୍ କରନ୍ତୁ ଏବଂ ନିଜ ବ୍ୟାଙ୍କ ଖାତା / UPI (Paytm, BharatPe ଇତ୍ୟାଦି) ଲିଙ୍କ୍ କରନ୍ତୁ।</li>
+            <li>Dashboard ➡️ <b>API Keys</b> କୁ ଯାଇ <b>API Key (pi_live_...)</b> ଏବଂ <b>API Secret (sk_live_...)</b> କପି କରି ଉପରେ ପେଷ୍ଟ୍ କରନ୍ତୁ।</li>
+            <li>Dashboard ➡️ <b>Webhooks</b> କୁ ଯାଇ ଉପରୋକ୍ତ <b>Webhook URL</b> ପେଷ୍ଟ୍ କରି Save କରନ୍ତୁ।</li>
+          </ol>
+        </div>
+
+        <button class="btn btn-primary" onclick="saveSmbUpiSettings()" style="background: #059669; border-color: #059669;">
+          💾 SMB UPI Settings ସେଭ୍ କରନ୍ତୁ
+        </button>
+      </div>
     </section>
 
     <!-- TAB 5: COUNTER QR POSTER -->

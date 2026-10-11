@@ -5,3 +5,7 @@ python-multipart>=0.0.9
 qrcode>=7.4.2
 Pillow>=10.0.0
 pypdf>=4.0.0
+paytmchecksum>=1.7.0
+pycryptodome>=3.20.0
+phonepe-pg-sdk-python>=3.0.0
+requests>=2.31.0
