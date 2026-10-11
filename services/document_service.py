@@ -122,16 +122,29 @@ def parse_page_range(range_str: str, max_pages: int) -> list[int]:
 def prepare_final_print_pdf(job_id: str) -> str:
     """
     If specific pages were selected, generates a trimmed PDF for printing.
-    Otherwise returns original pdf path.
+    Otherwise returns original pdf path. Supports jobs from SQLite database and fallback cache.
     """
-    job = get_job(job_id)
+    import database
+    job = database.get_job(job_id)
     if not job:
-        raise ValueError("Job not found")
+        job = get_job(job_id)
+    if not job:
+        raise ValueError(f"Job {job_id} not found in database or cache")
     
-    original_pdf = Path(job["pdf_path"])
+    pdf_raw = job.get("pdf_path") or ""
+    original_pdf = Path(pdf_raw)
+    if not original_pdf.is_absolute():
+        original_pdf = (Path(__file__).parent.parent / original_pdf).resolve()
+    
+    if not original_pdf.exists():
+        fallback_uploads = UPLOADS_DIR / original_pdf.name
+        if fallback_uploads.exists():
+            original_pdf = fallback_uploads
+        else:
+            raise FileNotFoundError(f"PDF file not found: {original_pdf}")
+    
     selected_pages_str = job.get("selected_pages", "all")
-    
-    if selected_pages_str == "all":
+    if not selected_pages_str or selected_pages_str == "all":
         return str(original_pdf)
     
     reader = PdfReader(str(original_pdf))

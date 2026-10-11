@@ -276,7 +276,9 @@ function openEditShopModal(shopId) {
   document.getElementById("editSlug").value = shop.slug;
   document.getElementById("editUpiId").value = shop.upi_id || "";
   document.getElementById("editRateBw").value = shop.rate_bw !== undefined ? shop.rate_bw : 2.0;
+  document.getElementById("editRateDoubleBw").value = shop.rate_double_bw !== undefined ? shop.rate_double_bw : 3.0;
   document.getElementById("editRateColor").value = shop.rate_color !== undefined ? shop.rate_color : 10.0;
+  document.getElementById("editRateDoubleColor").value = shop.rate_double_color !== undefined ? shop.rate_double_color : 15.0;
   document.getElementById("editExpiryDate").value = shop.subscription_expires_at || "";
   document.getElementById("editIsActive").value = shop.is_active ? "1" : "0";
 
@@ -304,7 +306,9 @@ async function handleSaveShopEdit(e) {
     slug: document.getElementById("editSlug").value.trim(),
     upi_id: document.getElementById("editUpiId").value.trim(),
     rate_bw: parseFloat(document.getElementById("editRateBw").value),
+    rate_double_bw: parseFloat(document.getElementById("editRateDoubleBw").value || 3.0),
     rate_color: parseFloat(document.getElementById("editRateColor").value),
+    rate_double_color: parseFloat(document.getElementById("editRateDoubleColor").value || 15.0),
     subscription_expires_at: document.getElementById("editExpiryDate").value.trim(),
     is_active: parseInt(document.getElementById("editIsActive").value, 10)
   };

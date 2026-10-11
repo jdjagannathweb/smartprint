@@ -11,10 +11,11 @@ from fastapi.responses import HTMLResponse, FileResponse, JSONResponse, PlainTex
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 from typing import Optional
+from datetime import datetime
 from pydantic import BaseModel
 
 import database
-from services.printer_service import get_installed_printers, print_pdf, generate_test_page_pdf
+from services.printer_service import get_installed_printers, print_pdf, generate_test_page_pdf, SUMATRA_PATH
 from services.payment_service import generate_upi_uri, generate_qr_base64, generate_counter_qr
 from services.tunnel_service import start_tunnel_thread, get_public_url
 from services.document_service import process_uploaded_file, parse_page_range, prepare_final_print_pdf, delete_job_files, cleanup_old_uploads
@@ -181,7 +182,10 @@ class ShopSettingsUpdate(BaseModel):
     upi_id: str
     rate_bw: float
     rate_color: float
+    rate_double_bw: Optional[float] = 3.0
+    rate_double_color: Optional[float] = 15.0
     selected_printer: str = ""
+    auto_print_enabled: Optional[int] = 1
 
 @app.post("/api/shop/{shop_id}/settings")
 def update_shop_config(shop_id: str, body: ShopSettingsUpdate):
@@ -195,7 +199,10 @@ def update_shop_config(shop_id: str, body: ShopSettingsUpdate):
         "upi_id": body.upi_id,
         "rate_bw": body.rate_bw,
         "rate_color": body.rate_color,
-        "selected_printer": body.selected_printer
+        "rate_double_bw": body.rate_double_bw if body.rate_double_bw is not None else 3.0,
+        "rate_double_color": body.rate_double_color if body.rate_double_color is not None else 15.0,
+        "selected_printer": body.selected_printer,
+        "auto_print_enabled": body.auto_print_enabled if body.auto_print_enabled is not None else 1
     })
     return {"success": True, "shop": updated}
 
@@ -237,6 +244,8 @@ def get_customer_shop_info(slug: str):
         "owner_name": shop["owner_name"],
         "rate_bw": shop["rate_bw"],
         "rate_color": shop["rate_color"],
+        "rate_double_bw": shop.get("rate_double_bw", 3.0),
+        "rate_double_color": shop.get("rate_double_color", 15.0),
         "upi_id": shop["upi_id"],
         "shop_qr_image": shop["shop_qr_image"],
         "is_active": bool(shop["is_active"]),
@@ -310,17 +319,29 @@ def customer_configure_job(job_id: str, body: CustomerConfigureRequest):
         raise HTTPException(status_code=404, detail="Job not found")
     shop = database.get_shop_by_id(job["shop_id"])
     
-    rate = float(shop["rate_color"]) if body.color_mode == "color" else float(shop["rate_bw"])
+    color_mode = body.color_mode
+    print_side = (body.print_side or "single").lower()
+    if print_side not in ["single", "double"]:
+        print_side = "single"
+    
     total_doc_pages = job["total_pages"]
     page_choice = body.page_range or body.selected_pages or "all"
     pages_to_print = parse_page_range(page_choice, total_doc_pages)
     num_pages = len(pages_to_print)
     copies = max(1, body.copies)
-    total_amount = round(num_pages * copies * rate, 2)
-    
-    print_side = (body.print_side or "single").lower()
-    if print_side not in ["single", "double"]:
-        print_side = "single"
+
+    rate_single = float(shop["rate_color"]) if color_mode == "color" else float(shop["rate_bw"])
+    rate_double = float(shop.get("rate_double_color" if color_mode == "color" else "rate_double_bw") or (rate_single * 1.5))
+
+    if print_side == "double":
+        double_sheets = num_pages // 2
+        single_sheets = num_pages % 2
+        sheet_cost = (double_sheets * rate_double) + (single_sheets * rate_single)
+        total_amount = round(sheet_cost * copies, 2)
+        rate_per_page = round(total_amount / (num_pages * copies), 2) if num_pages > 0 else rate_single
+    else:
+        total_amount = round(num_pages * copies * rate_single, 2)
+        rate_per_page = rate_single
     
     upi_uri = generate_upi_uri(
         upi_id=shop.get("upi_id") or "merchant@upi",
@@ -333,9 +354,9 @@ def customer_configure_job(job_id: str, body: CustomerConfigureRequest):
     updated = database.update_job_status(job_id, {
         "num_pages_to_print": num_pages,
         "copies": copies,
-        "color_mode": body.color_mode,
+        "color_mode": color_mode,
         "print_side": print_side,
-        "rate_per_page": rate,
+        "rate_per_page": rate_per_page,
         "total_amount": total_amount
     })
     
@@ -357,16 +378,29 @@ def customer_get_status(job_id: str):
     return job
 
 @app.post("/api/customer/jobs/{job_id}/pay-claimed")
-def customer_claim_paid(job_id: str):
+def customer_claim_paid(job_id: str, background_tasks: BackgroundTasks):
     job = database.get_job(job_id)
     if not job:
         raise HTTPException(status_code=404, detail="Job not found")
     
-    updated = database.update_job_status(job_id, {
-        "payment_status": "claimed",
-        "print_status": "waiting_merchant"
-    })
-    return {"success": True, "job": updated}
+    shop = database.get_shop_by_id(job["shop_id"])
+    auto_print = bool(shop.get("auto_print_enabled", 1)) if shop else True
+    
+    if auto_print:
+        # ⚡ Instant Auto-Print Mode: directly trigger print without waiting!
+        updated = database.update_job_status(job_id, {
+            "payment_status": "paid",
+            "print_status": "printing"
+        })
+        background_tasks.add_task(trigger_print_execution, job_id)
+        return {"success": True, "job": updated, "auto_printed": True}
+    else:
+        # Manual Merchant Approval Mode: waits for shopkeeper to click approve
+        updated = database.update_job_status(job_id, {
+            "payment_status": "claimed",
+            "print_status": "waiting_merchant"
+        })
+        return {"success": True, "job": updated, "auto_printed": False}
 
 # ==================== MERCHANT ORDER ACTIONS ====================
 
@@ -424,7 +458,16 @@ def connector_poll_jobs(shop_id: str, token: str):
     # Find approved jobs waiting for print
     conn = database.get_connection()
     c = conn.cursor()
-    c.execute("SELECT * FROM jobs WHERE shop_id = ? AND payment_status = 'paid' AND print_status = 'printing' ORDER BY created_at ASC", (shop_id,))
+    c.execute("""
+        SELECT * FROM jobs 
+        WHERE shop_id = ? 
+          AND (
+            (payment_status = 'paid' AND print_status = 'printing')
+            OR (print_status = 'printing')
+            OR (payment_status IN ('paid', 'confirmed') AND print_status IN ('printing', 'approved'))
+          )
+        ORDER BY created_at ASC
+    """, (shop_id,))
     jobs = [dict(r) for r in c.fetchall()]
     conn.close()
     return {"jobs": jobs}
@@ -515,6 +558,29 @@ def download_windows_app():
         return FileResponse(zip_path, media_type="application/zip", filename="SmartPrintApp_Windows.zip")
     return FileResponse(BASE_DIR / "smart_print_app.py", media_type="text/plain", filename="smart_print_app.py")
 
+@app.get("/api/connector/config/{shop_id}")
+def download_connector_config(shop_id: str):
+    shop = database.get_shop_by_id(shop_id)
+    if not shop:
+        raise HTTPException(status_code=404, detail="Shop not found")
+    base_url = get_base_url()
+    cfg = {
+        "server_url": base_url,
+        "shop_id": shop["shop_id"],
+        "token": shop["connector_token"],
+        "printer": shop.get("selected_printer") or "",
+        "bw_printer": "",
+        "color_printer": "",
+        "multi_printer_enabled": False,
+        "auto_duplex": True,
+        "auto_start": False
+    }
+    return Response(
+        content=json.dumps(cfg, indent=2),
+        media_type="application/json",
+        headers={"Content-Disposition": 'attachment; filename="connector_config.json"'}
+    )
+
 @app.get("/api/connector/script")
 def download_connector_python_script():
     return FileResponse(BASE_DIR / "print_connector.py", media_type="text/plain", filename="print_connector.py")
@@ -591,12 +657,41 @@ def list_printers():
 
 class TestPrintRequest(BaseModel):
     printer_name: str = ""
+    shop_id: Optional[str] = ""
 
 @app.post("/api/test-print")
 def run_test_print(body: TestPrintRequest):
     try:
-        test_pdf = generate_test_page_pdf()
-        res = print_pdf(test_pdf, printer_name=body.printer_name or None, copies=1, color_mode="bw")
+        shop = database.get_shop_by_id(body.shop_id) if body.shop_id else None
+        shop_name = shop["shop_name"] if shop else "Smart Print"
+        target_printer = body.printer_name or (shop.get("selected_printer") if shop else "")
+        job_id = "JOB-TEST-" + uuid.uuid4().hex[:6].upper()
+        test_pdf = UPLOADS_DIR / f"{job_id}.pdf"
+        generate_test_page_pdf(printer_name=target_printer or "System Default", shop_name=shop_name, output_path=str(test_pdf))
+        
+        # If running on Cloud (Render / Linux / no local Windows printer attached to server),
+        # queue an approved test print job so Windows Desktop Agent prints it automatically!
+        is_windows = (os.name == "nt")
+        if (not is_windows or not SUMATRA_PATH.exists()) and body.shop_id:
+            database.create_job({
+                "id": job_id,
+                "shop_id": body.shop_id,
+                "original_name": "Test_Print_Page.pdf",
+                "pdf_path": str(test_pdf),
+                "total_pages": 1,
+                "num_pages_to_print": 1,
+                "copies": 1,
+                "color_mode": "bw",
+                "print_side": "single",
+                "rate_per_page": 0.0,
+                "total_amount": 0.0,
+                "payment_status": "paid",
+                "print_status": "printing",
+                "created_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            })
+            return {"success": True, "method": "cloud_connector", "message": "Test print queued for Windows Desktop Agent"}
+        
+        res = print_pdf(str(test_pdf), printer_name=body.printer_name or None, copies=1, color_mode="bw")
         return res
     except Exception as e:
         return {"success": False, "error": str(e)}
@@ -678,7 +773,9 @@ class SuperAdminShopUpdateRequest(BaseModel):
     password: Optional[str] = None
     upi_id: Optional[str] = ""
     rate_bw: float = 2.0
+    rate_double_bw: Optional[float] = 3.0
     rate_color: float = 10.0
+    rate_double_color: Optional[float] = 15.0
     is_active: int = 1
     subscription_expires_at: Optional[str] = None
 

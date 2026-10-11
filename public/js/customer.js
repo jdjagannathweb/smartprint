@@ -42,10 +42,16 @@ async function initShop() {
 
     // Populate UI
     document.getElementById("headerShopName").textContent = data.shop_name;
-    document.getElementById("rateBwDisplay").textContent = `₹${parseFloat(data.rate_bw).toFixed(2)}`;
-    document.getElementById("rateColorDisplay").textContent = `₹${parseFloat(data.rate_color).toFixed(2)}`;
-    document.getElementById("cfgBwRateLabel").textContent = `₹${parseFloat(data.rate_bw).toFixed(2)} / ପେଜ୍`;
-    document.getElementById("cfgColorRateLabel").textContent = `₹${parseFloat(data.rate_color).toFixed(2)} / ପେଜ୍`;
+    const rateBw = parseFloat(data.rate_bw || 2.0).toFixed(2);
+    const rateDbBw = parseFloat(data.rate_double_bw || 3.0).toFixed(2);
+    const rateCol = parseFloat(data.rate_color || 10.0).toFixed(2);
+    const rateDbCol = parseFloat(data.rate_double_color || 15.0).toFixed(2);
+
+    document.getElementById("rateBwDisplay").textContent = `₹${rateBw} (୨-ପାଖ: ₹${rateDbBw}/କାଗଜ)`;
+    document.getElementById("rateColorDisplay").textContent = `₹${rateCol} (୨-ପାଖ: ₹${rateDbCol}/କାଗଜ)`;
+    document.getElementById("cfgBwRateLabel").textContent = `₹${rateBw} / ପେଜ୍`;
+    document.getElementById("cfgColorRateLabel").textContent = `₹${rateCol} / ପେଜ୍`;
+    updateSideRateHints();
 
     // Shop custom standee QR if exists
     if (data.shop_qr_image) {
@@ -166,10 +172,23 @@ function setStep(stepNum) {
   }
 }
 
+function updateSideRateHints() {
+  if (!currentShop) return;
+  const isColor = selectedColorMode === "color";
+  const rateSingle = isColor ? parseFloat(currentShop.rate_color || 10.0) : parseFloat(currentShop.rate_bw || 2.0);
+  const rateDouble = isColor ? parseFloat(currentShop.rate_double_color || (rateSingle * 1.5)) : parseFloat(currentShop.rate_double_bw || 3.0);
+  
+  const hintSingle = document.getElementById("sideSingleRateHint");
+  if (hintSingle) hintSingle.textContent = `₹${rateSingle.toFixed(2)} / ପେଜ୍ (୧ ପୃଷ୍ଠା/କାଗଜ)`;
+  const hintDouble = document.getElementById("sideDoubleRateHint");
+  if (hintDouble) hintDouble.textContent = `₹${rateDouble.toFixed(2)} / କାଗଜ (୨ ପୃଷ୍ଠା/Duplex)`;
+}
+
 function setColorMode(mode) {
   selectedColorMode = mode;
   document.getElementById("modeBw").className = mode === "bw" ? "mode-card selected" : "mode-card";
   document.getElementById("modeColor").className = mode === "color" ? "mode-card selected" : "mode-card";
+  updateSideRateHints();
   calculateTotal();
 }
 
@@ -230,23 +249,37 @@ function getCalculatedPages() {
 function calculateTotal() {
   if (!currentJob || !currentShop) return;
   const numPages = getCalculatedPages();
-  const rate = selectedColorMode === "color" ? parseFloat(currentShop.rate_color) : parseFloat(currentShop.rate_bw);
-  const total = numPages * selectedCopies * rate;
+  const isColor = selectedColorMode === "color";
+  const rateSingle = isColor ? parseFloat(currentShop.rate_color || 10.0) : parseFloat(currentShop.rate_bw || 2.0);
+  const rateDouble = isColor ? parseFloat(currentShop.rate_double_color || (rateSingle * 1.5)) : parseFloat(currentShop.rate_double_bw || 3.0);
 
-  const sheetsPerCopy = selectedPrintSide === "double" ? Math.ceil(numPages / 2) : numPages;
+  const isDouble = selectedPrintSide === "double";
+  let total = 0;
+  if (isDouble) {
+    const doubleSheets = Math.floor(numPages / 2);
+    const singleSheets = numPages % 2;
+    total = ((doubleSheets * rateDouble) + (singleSheets * rateSingle)) * selectedCopies;
+  } else {
+    total = numPages * selectedCopies * rateSingle;
+  }
+
+  const sheetsPerCopy = isDouble ? Math.ceil(numPages / 2) : numPages;
   const totalSheets = sheetsPerCopy * selectedCopies;
 
   document.getElementById("sumPrintPages").textContent = `${numPages} ପେଜ୍`;
   const printSideEl = document.getElementById("sumPrintSide");
   if (printSideEl) {
-    printSideEl.textContent = selectedPrintSide === "double" ? "ଉଭୟ ପାଖ (Double Sided)" : "ଗୋଟିଏ ପାଖ (1-Side)";
+    printSideEl.textContent = isDouble ? "ଉଭୟ ପାଖ (Double Sided)" : "ଗୋଟିଏ ପାଖ (1-Side)";
   }
   const sheetsEl = document.getElementById("sumSheets");
   if (sheetsEl) {
-    sheetsEl.textContent = `${totalSheets} ଟି କାଗଜ ${selectedPrintSide === "double" ? "(ଉଭୟ ପାଖ)" : ""}`;
+    sheetsEl.textContent = `${totalSheets} ଟି କାଗଜ ${isDouble ? "(ଉଭୟ ପାଖ)" : ""}`;
   }
   document.getElementById("sumCopies").textContent = `${selectedCopies} କପି`;
-  document.getElementById("sumRate").textContent = `₹${rate.toFixed(2)}`;
+  const sumRateEl = document.getElementById("sumRate");
+  if (sumRateEl) {
+    sumRateEl.textContent = isDouble ? `₹${rateDouble.toFixed(2)} / କାଗଜ (୨-ପାଖ)` : `₹${rateSingle.toFixed(2)} / ପେଜ୍`;
+  }
   document.getElementById("sumTotal").textContent = `₹${total.toFixed(2)}`;
 }
 

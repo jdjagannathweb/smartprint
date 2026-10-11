@@ -30,7 +30,10 @@ def init_db():
         shop_qr_image TEXT DEFAULT '',
         rate_bw REAL DEFAULT 2.0,
         rate_color REAL DEFAULT 10.0,
+        rate_double_bw REAL DEFAULT 3.0,
+        rate_double_color REAL DEFAULT 15.0,
         selected_printer TEXT DEFAULT '',
+        auto_print_enabled INTEGER DEFAULT 1,
         connector_token TEXT NOT NULL,
         subscription_plan TEXT DEFAULT 'plan1_free',
         subscription_expires_at TEXT NOT NULL,
@@ -38,6 +41,23 @@ def init_db():
         created_at TEXT NOT NULL
     )
     """)
+    
+    # Safe migration for existing databases
+    try:
+        c.execute("ALTER TABLE shops ADD COLUMN rate_double_bw REAL DEFAULT 3.0")
+        conn.commit()
+    except Exception:
+        pass
+    try:
+        c.execute("ALTER TABLE shops ADD COLUMN rate_double_color REAL DEFAULT 15.0")
+        conn.commit()
+    except Exception:
+        pass
+    try:
+        c.execute("ALTER TABLE shops ADD COLUMN auto_print_enabled INTEGER DEFAULT 1")
+        conn.commit()
+    except Exception:
+        pass
     
     # 2. Print Jobs table
     c.execute("""
@@ -165,9 +185,9 @@ def register_shop(shop_name, owner_name, mobile, password, slug=None, upi_id="")
         c.execute("""
         INSERT INTO shops (
             shop_id, slug, shop_name, owner_name, mobile, password,
-            upi_id, upi_name, rate_bw, rate_color, connector_token,
+            upi_id, upi_name, rate_bw, rate_color, rate_double_bw, rate_double_color, connector_token,
             subscription_plan, subscription_expires_at, is_active, created_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 2.0, 10.0, ?, 'plan1_free', ?, 1, ?)
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 2.0, 10.0, 3.0, 15.0, ?, 'plan1_free', ?, 1, ?)
         """, (
             shop_id, slug, shop_name, owner_name, mobile, password,
             upi_id, owner_name, connector_token,
@@ -211,7 +231,8 @@ def update_shop_settings(shop_id, updates):
     fields = []
     values = []
     allowed = ["shop_name", "owner_name", "upi_id", "upi_name", "shop_qr_image",
-               "rate_bw", "rate_color", "selected_printer", "password", "is_active"]
+               "rate_bw", "rate_color", "rate_double_bw", "rate_double_color",
+               "selected_printer", "auto_print_enabled", "password", "is_active"]
     for k in allowed:
         if k in updates:
             fields.append(f"{k} = ?")
@@ -481,9 +502,15 @@ def superadmin_update_shop(shop_id, data):
     if "rate_bw" in data and data["rate_bw"] is not None:
         fields.append("rate_bw = ?")
         params.append(float(data["rate_bw"]))
+    if "rate_double_bw" in data and data["rate_double_bw"] is not None:
+        fields.append("rate_double_bw = ?")
+        params.append(float(data["rate_double_bw"]))
     if "rate_color" in data and data["rate_color"] is not None:
         fields.append("rate_color = ?")
         params.append(float(data["rate_color"]))
+    if "rate_double_color" in data and data["rate_double_color"] is not None:
+        fields.append("rate_double_color = ?")
+        params.append(float(data["rate_double_color"]))
     if "is_active" in data and data["is_active"] is not None:
         fields.append("is_active = ?")
         params.append(int(data["is_active"]))

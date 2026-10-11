@@ -111,15 +111,29 @@ async function loadShopDetails() {
     document.getElementById("standeeShopTitle").textContent = shop.shop_name;
 
     // Connector Download Buttons
-    document.getElementById("btnDownloadConnector").href = `/api/connector/download-launcher/${shop.shop_id}`;
+    const btnConnector = document.getElementById("btnDownloadConnector");
+    if (btnConnector) btnConnector.href = `/api/connector/download-launcher/${shop.shop_id}`;
     const btnChange = document.getElementById("btnDownloadChangePrinter");
-    if (btnChange) {
-      btnChange.href = `/api/connector/download-change-printer/${shop.shop_id}`;
-    }
+    if (btnChange) btnChange.href = `/api/connector/download-change-printer/${shop.shop_id}`;
 
-    // Pricing
+    // Desktop App Credentials & Download Config
+    const dispShopId = document.getElementById("dispShopId");
+    if (dispShopId) dispShopId.value = shop.shop_id || "";
+    const dispToken = document.getElementById("dispConnectorToken");
+    if (dispToken) dispToken.value = shop.connector_token || "";
+    const btnCfgJson = document.getElementById("btnDownloadConfigJson");
+    if (btnCfgJson) btnCfgJson.href = `/api/connector/config/${shop.shop_id}`;
+
+    // Pricing (Single and Double Sided) & Auto-Print
     document.getElementById("rateBwInput").value = shop.rate_bw || 2.0;
+    const rateDbBw = document.getElementById("rateDoubleBwInput");
+    if (rateDbBw) rateDbBw.value = shop.rate_double_bw !== undefined ? shop.rate_double_bw : 3.0;
     document.getElementById("rateColorInput").value = shop.rate_color || 10.0;
+    const rateDbCol = document.getElementById("rateDoubleColorInput");
+    if (rateDbCol) rateDbCol.value = shop.rate_double_color !== undefined ? shop.rate_double_color : 15.0;
+    const autoPrintEl = document.getElementById("autoPrintToggle");
+    if (autoPrintEl) autoPrintEl.checked = (shop.auto_print_enabled !== undefined ? Boolean(shop.auto_print_enabled) : true);
+    if (typeof updatePricingPreview === "function") updatePricingPreview();
 
     // UPI
     document.getElementById("upiIdInput").value = shop.upi_id || "";
@@ -178,12 +192,13 @@ async function loadShopDetails() {
 }
 
 async function loadPrinters() {
+  const select = document.getElementById("printerSelect");
+  if (!select) return;
   try {
     const res = await fetch("/api/printers");
     if (res.ok) {
       const data = await res.json();
       availablePrinters = data.printers || [];
-      const select = document.getElementById("printerSelect");
       select.innerHTML = '<option value="">(ସିଷ୍ଟମ୍ ଡିଫଲ୍ଟ ପ୍ରିଣ୍ଟର୍)</option>';
 
       availablePrinters.forEach(p => {
@@ -212,7 +227,9 @@ async function savePrinterChoice() {
         owner_name: currentShop.owner_name,
         upi_id: currentShop.upi_id,
         rate_bw: currentShop.rate_bw,
+        rate_double_bw: currentShop.rate_double_bw !== undefined ? currentShop.rate_double_bw : 3.0,
         rate_color: currentShop.rate_color,
+        rate_double_color: currentShop.rate_double_color !== undefined ? currentShop.rate_double_color : 15.0,
         selected_printer: printer
       })
     });
@@ -226,20 +243,35 @@ async function savePrinterChoice() {
 }
 
 async function triggerTestPrint() {
+  const btn = document.getElementById("btnWebTestPrint");
+  if (btn) {
+    btn.disabled = true;
+    btn.textContent = "⏳ ପଠାଯାଉଛି...";
+  }
   try {
+    const shopId = currentShopId || currentShop?.shop_id || "";
     const res = await fetch("/api/test-print", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ printer_name: currentShop?.selected_printer || "" })
+      body: JSON.stringify({
+        shop_id: shopId,
+        printer_name: currentShop?.selected_printer || ""
+      })
     });
     const data = await res.json();
     if (data.success) {
-      alert("✅ ଟେଷ୍ଟ୍ ପେଜ୍ ପ୍ରିଣ୍ଟ୍ କମାଣ୍ଡ୍ ସଫଳତାର ସହ ପଠାଗଲା!");
+      alert("✅ ଟେଷ୍ଟ୍ ପେଜ୍ ପ୍ରିଣ୍ଟ୍ କମାଣ୍ଡ୍ ସଫଳତାର ସହ ପଠାଗଲା!\nଆପଣଙ୍କ PC ରେ ଚାଲୁଥିବା SmartPrintConnect ଆପ୍ ଏହାକୁ ତୁରନ୍ତ ପ୍ରିଣ୍ଟ୍ କରିବ।");
+      loadJobsTable();
     } else {
       alert("❌ ଟେଷ୍ଟ୍ ପ୍ରିଣ୍ଟ୍ ବିଫଳ: " + (data.error || ""));
     }
   } catch (e) {
     alert("❌ ଟେଷ୍ଟ୍ ପ୍ରିଣ୍ଟ୍ ବିଫଳ: " + e.message);
+  } finally {
+    if (btn) {
+      btn.disabled = false;
+      btn.textContent = "🖨️ ଟେଷ୍ଟ୍ ପେଜ୍ ପ୍ରିଣ୍ଟ୍ କରନ୍ତୁ";
+    }
   }
 }
 
@@ -406,14 +438,54 @@ async function deleteJob(jobId) {
   }
 }
 
+function copyInputText(inputId, msg) {
+  const el = document.getElementById(inputId);
+  if (!el) return;
+  el.select();
+  el.setSelectionRange(0, 99999);
+  navigator.clipboard.writeText(el.value).then(() => {
+    alert(msg || "Copied to clipboard!");
+  }).catch(() => {
+    // Fallback
+    document.execCommand("copy");
+    alert(msg || "Copied to clipboard!");
+  });
+}
+
+function updatePricingPreview() {
+  const bw = parseFloat(document.getElementById("rateBwInput")?.value || 2.0);
+  const dbBw = parseFloat(document.getElementById("rateDoubleBwInput")?.value || 3.0);
+  const col = parseFloat(document.getElementById("rateColorInput")?.value || 10.0);
+  const dbCol = parseFloat(document.getElementById("rateDoubleColorInput")?.value || 15.0);
+
+  const prevBw = document.getElementById("previewBwCalc");
+  if (prevBw) {
+    const single10 = (10 * bw).toFixed(0);
+    const double10 = (5 * dbBw).toFixed(0);
+    prevBw.textContent = `• ୧୦ ପେଜ୍ କଳା-ଧଳା ୧-ପାଖ: ₹${single10} (10 କାଗଜ) | ୨-ପାଖ (Double Sided): ₹${double10} (5 କାଗଜ)`;
+  }
+
+  const prevCol = document.getElementById("previewColorCalc");
+  if (prevCol) {
+    const single10 = (10 * col).toFixed(0);
+    const double10 = (5 * dbCol).toFixed(0);
+    prevCol.textContent = `• ୧୦ ପେଜ୍ ରଙ୍ଗୀନ ୧-ପାଖ: ₹${single10} (10 କାଗଜ) | ୨-ପାଖ (Double Sided): ₹${double10} (5 କାଗଜ)`;
+  }
+}
+
 async function savePricing() {
   const rateBw = parseFloat(document.getElementById("rateBwInput").value);
+  const rateDoubleBw = parseFloat(document.getElementById("rateDoubleBwInput")?.value || 3.0);
   const rateColor = parseFloat(document.getElementById("rateColorInput").value);
+  const rateDoubleColor = parseFloat(document.getElementById("rateDoubleColorInput")?.value || 15.0);
 
-  if (isNaN(rateBw) || isNaN(rateColor) || rateBw <= 0 || rateColor <= 0) {
-    alert("ଦୟାକରି ସଠିକ୍ ଦର ଦିଅନ୍ତୁ!");
+  if (isNaN(rateBw) || isNaN(rateColor) || isNaN(rateDoubleBw) || isNaN(rateDoubleColor) ||
+      rateBw <= 0 || rateColor <= 0 || rateDoubleBw <= 0 || rateDoubleColor <= 0) {
+    alert("ଦୟାକରି ସମସ୍ତ ଖାଲି ସ୍ଥାନରେ ସଠିକ୍ ଦର ଦିଅନ୍ତୁ!");
     return;
   }
+
+  const autoPrintEnabled = document.getElementById("autoPrintToggle")?.checked ? 1 : 0;
 
   try {
     const res = await fetch(`/api/shop/${currentShopId}/settings`, {
@@ -424,12 +496,15 @@ async function savePricing() {
         owner_name: currentShop.owner_name,
         upi_id: currentShop.upi_id,
         rate_bw: rateBw,
+        rate_double_bw: rateDoubleBw,
         rate_color: rateColor,
-        selected_printer: currentShop.selected_printer || ""
+        rate_double_color: rateDoubleColor,
+        selected_printer: currentShop.selected_printer || "",
+        auto_print_enabled: autoPrintEnabled
       })
     });
     if (res.ok) {
-      alert("✅ ଦର ସଫଳତାର ସହ ସେଭ୍ ହେଲା!");
+      alert("✅ ଦର ଏବଂ ଅଟୋ-ପ୍ରିଣ୍ଟ୍ ସେଟିଙ୍ଗ୍ ସଫଳତାର ସହ ସେଭ୍ ହେଲା!");
       await loadShopDetails();
     }
   } catch (err) {
@@ -453,7 +528,9 @@ async function saveUpiId() {
         owner_name: currentShop.owner_name,
         upi_id: upiId,
         rate_bw: currentShop.rate_bw,
+        rate_double_bw: currentShop.rate_double_bw !== undefined ? currentShop.rate_double_bw : 3.0,
         rate_color: currentShop.rate_color,
+        rate_double_color: currentShop.rate_double_color !== undefined ? currentShop.rate_double_color : 15.0,
         selected_printer: currentShop.selected_printer || ""
       })
     });

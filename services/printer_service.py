@@ -105,11 +105,15 @@ def print_pdf(file_path, printer_name=None, copies=1, color_mode="bw", print_sid
     except Exception as e:
         return {"success": False, "error": str(e)}
 
-def generate_test_page_pdf(printer_name: str, shop_name: str) -> str:
+def generate_test_page_pdf(printer_name: str = "System Default", shop_name: str = "Smart Print", output_path: str = None) -> str:
     """Generates an A4 test print PDF."""
-    target_dir = Path(__file__).parent.parent / "uploads"
-    target_dir.mkdir(parents=True, exist_ok=True)
-    pdf_path = target_dir / "test_print_page.pdf"
+    if output_path:
+        pdf_path = Path(output_path).resolve()
+        pdf_path.parent.mkdir(parents=True, exist_ok=True)
+    else:
+        target_dir = Path(__file__).parent.parent / "uploads"
+        target_dir.mkdir(parents=True, exist_ok=True)
+        pdf_path = target_dir / "test_print_page.pdf"
     
     # A4 at 150 DPI = 1240 x 1754
     width, height = 1240, 1754

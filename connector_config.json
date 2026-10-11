@@ -1,5 +1,11 @@
 {
+  "server_url": "https://smartprint-xvt8.onrender.com",
+  "shop_id": "SHP-818D63",
+  "token": "TOK-F2B712C4357C",
+  "printer": "EPSON L3210 Series",
   "bw_printer": "KONICA MINOLTA 205i",
   "color_printer": "EPSON L3210 Series",
-  "printer": "KONICA MINOLTA 205i"
+  "multi_printer_enabled": false,
+  "auto_duplex": true,
+  "auto_start": false
 }

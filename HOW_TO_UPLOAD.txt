@@ -1,0 +1,48 @@
+========================================================
+SMART PRINT - GITHUB UPLOAD INSTRUCTIONS
+========================================================
+
+Aapke SmartPrint website (Render) ke liye ye sabhi errors fix kar diye gaye hain:
+1. Test Print Error fix (missing 2 arguments: printer_name and shop_name)
+2. 2-Sided (Double Sided / Duplex) Print Rate Setting Dukandar Dashboard me add ho gaya
+3. Windows App ke liye Shop ID aur Token ka card Dashboard me add ho gaya
+
+--------------------------------------------------------
+KAISE GITHUB PAR UPLOAD KAREIN (STEP-BY-STEP):
+--------------------------------------------------------
+1. Apne browser me GitHub kholein aur SmartPrint wala repository kholein.
+2. Root folder me 'Add file' -> 'Upload files' par click karein.
+3. SMARTPRINT_GITHUB_UPLOAD folder se ye files drag and drop karein:
+   - server.py
+   - database.py
+   - requirements.txt
+   - render.yaml
+   - print_connector.py
+   - smart_print_app.py
+4. Niche 'Commit changes' par click karein.
+
+5. Ab GitHub me 'services' folder kholein (agar pehle se hai toh usme jayein, warna upload karein):
+   - 'Add file' -> 'Upload files'
+   - SMARTPRINT_GITHUB_UPLOAD/services folder se:
+     - printer_service.py
+     - document_service.py
+     - payment_service.py
+     - settings_service.py
+     - tunnel_service.py
+   - Niche 'Commit changes' par click karein.
+
+6. Ab GitHub me 'public' folder kholein:
+   - 'Add file' -> 'Upload files'
+   - SMARTPRINT_GITHUB_UPLOAD/public se HTML files upload karein:
+     - dashboard.html
+     - customer.html
+     - login.html
+     - register.html
+     - superadmin.html
+   - Aur public/js folder me jaakar JS files upload karein:
+     - dashboard.js
+     - customer.js
+     - superadmin.js
+   - 'Commit changes' par click karein.
+
+Render automatically 1 minute ke andar nayi files ke saath website update kar dega!
