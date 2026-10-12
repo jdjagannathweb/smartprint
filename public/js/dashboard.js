@@ -1115,7 +1115,7 @@ function setModalPlan(planKey) {
 
   const btnOnline = document.getElementById("btnPayOnlineRenewal");
   if (btnOnline) {
-    btnOnline.textContent = `💳 ₹${price} ଅନଲାଇନ୍ ପେ କରନ୍ତୁ (${planName} Auto-Renew)`;
+    btnOnline.textContent = `💳 ₹${price} UPI ରେ ପେ କରନ୍ତୁ (${planName} Auto-Renew)`;
   }
 
   // Generate Admin UPI QR using generic URI generator
@@ -1127,8 +1127,10 @@ function setModalPlan(planKey) {
 async function payOnlineRenewal() {
   const btn = document.getElementById("btnPayOnlineRenewal");
   const notice = document.getElementById("renewalPollingNotice");
-  btn.disabled = true;
-  btn.textContent = "⏳ ଅର୍ଡର୍ ତିଆରି ହେଉଛି...";
+  if (btn) {
+    btn.disabled = true;
+    btn.textContent = "⏳ ଅର୍ଡର୍ ତିଆରି ହେଉଛି...";
+  }
 
   try {
     const res = await fetch("/api/subscription/create-order", {
@@ -1146,19 +1148,19 @@ async function payOnlineRenewal() {
 
     activeRenewalOrderId = data.order_id;
 
-    if (data.is_api && data.payment_url) {
-      window.open(data.payment_url, "_blank");
-      notice.style.display = "block";
+    if (data.is_api) {
+      window.open(data.upi_url || data.payment_url, "_blank");
+      if (notice) notice.style.display = "block";
       startRenewalStatusPolling(data.order_id);
     } else if (data.upi_uri) {
       window.location.href = data.upi_uri;
-      notice.style.display = "block";
+      if (notice) notice.style.display = "block";
       startRenewalStatusPolling(data.order_id);
     }
   } catch (err) {
     alert("ଭୁଲ୍: " + err.message);
   } finally {
-    btn.disabled = false;
+    if (btn) btn.disabled = false;
     setModalPlan(selectedModalPlan);
   }
 }

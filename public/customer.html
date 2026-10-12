@@ -317,17 +317,22 @@
           </a>
         </div>
 
-        <!-- SMBUPI 0% FEE AUTO-CHECKOUT STATUS & BUTTON -->
+        <!-- SMBUPI DUAL-CURRENCY GATEWAY (UPI & BINANCE PAY) -->
         <div id="smbupiAutoDetectBox" style="display: none; background: #ecfdf5; border: 2px solid #10b981; border-radius: 12px; padding: 14px 16px; margin-bottom: 16px; text-align: center;">
           <div style="font-weight: 800; color: #047857; font-size: 1rem; display: flex; align-items: center; justify-content: center; gap: 8px; margin-bottom: 8px;">
-            <span style="font-size: 1.2rem;">⚡</span> SMB UPI (0% Fee Gateway) ସକ୍ରିୟ
+            <span style="font-size: 1.2rem;">⚡</span> SMB Dual-Currency Gateway ସକ୍ରିୟ
           </div>
-          <p style="font-size: 0.85rem; color: #065f46; margin: 0 0 10px; line-height: 1.4;">
-            ତଳ ବଟନ୍ ରେ କ୍ଲିକ୍ କରି PhonePe, GPay ବା Paytm ରେ ପେ କରନ୍ତୁ। ପେମେଣ୍ଟ୍ ସରିବା ମାତ୍ରେ କାଗଜ ସିଧା ପ୍ରିଣ୍ଟ୍ ହୋଇଯିବ!
+          <p style="font-size: 0.85rem; color: #065f46; margin: 0 0 12px; line-height: 1.4;">
+            ତଳେ ଆପଣଙ୍କ ପସନ୍ଦର ପେମେଣ୍ଟ୍ ମାଧ୍ୟମ ଚୟନ କରନ୍ତୁ। ପେମେଣ୍ଟ୍ ସରିବା ମାତ୍ରେ କାଗଜ ସିଧା ପ୍ରିଣ୍ଟ୍ ହୋଇଯିବ!
           </p>
-          <button type="button" id="btnSmbUpiPay" onclick="triggerPayApp('smbupi')" class="btn btn-primary" style="background: linear-gradient(135deg, #059669 0%, #047857 100%); border-color: #047857; padding: 14px 20px; font-weight: 800; font-size: 1.05rem; display: inline-flex; align-items: center; justify-content: center; gap: 8px; width: 100%; box-sizing: border-box; border-radius: 10px; box-shadow: 0 4px 12px rgba(5, 150, 105, 0.25); cursor: pointer;">
-            ⚡ SMB UPI ରେ ପେ କରନ୍ତୁ (Pay & Auto-Print)
-          </button>
+          <div style="display: flex; flex-direction: column; gap: 8px;">
+            <button type="button" id="btnSmbUpiPay" onclick="triggerPayApp('smbupi_upi')" class="btn btn-primary" style="background: linear-gradient(135deg, #059669 0%, #047857 100%); border-color: #047857; padding: 12px 18px; font-weight: 800; font-size: 1rem; display: flex; align-items: center; justify-content: center; gap: 8px; width: 100%; box-sizing: border-box; border-radius: 10px; box-shadow: 0 4px 12px rgba(5, 150, 105, 0.25); cursor: pointer; color: #fff;">
+              ⚡ UPI ରେ ପେ କରନ୍ତୁ (GPay / PhonePe / Paytm)
+            </button>
+            <button type="button" id="btnSmbBinancePay" onclick="triggerPayApp('smbupi_binance')" class="btn" style="background: linear-gradient(135deg, #f0b90b 0%, #d9a404 100%); border: 1.5px solid #c99400; padding: 11px 18px; font-weight: 800; font-size: 0.95rem; display: flex; align-items: center; justify-content: center; gap: 8px; width: 100%; box-sizing: border-box; border-radius: 10px; box-shadow: 0 4px 12px rgba(240, 185, 11, 0.25); cursor: pointer; color: #181a20;">
+              🟡 Binance Pay ରେ ପେ କରନ୍ତୁ (Crypto USDT)
+            </button>
+          </div>
         </div>
 
         <!-- 1-CLICK UPI INTENT BUTTON (MOBILE APP) -->
@@ -338,7 +343,7 @@
         </div>
 
         <!-- QUICK APP SELECTION CHIPS -->
-        <div id="quickAppChips" style="display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; margin-bottom: 16px;">
+        <div id="quickAppChips" style="display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; margin-bottom: 12px;">
           <button type="button" id="quickPhonepeLink" onclick="triggerPayApp('phonepe')" style="background: #f5f3ff; color: #5b21b6; border: 1.5px solid #ddd6fe; border-radius: 999px; padding: 8px 16px; font-size: 0.88rem; font-weight: 700; cursor: pointer; display: inline-flex; align-items: center; gap: 6px;">
             🟣 PhonePe
           </button>
@@ -348,6 +353,11 @@
           <button type="button" id="quickPaytmLink" onclick="triggerPayApp('paytm')" style="background: #f0fdf4; color: #0284c7; border: 1.5px solid #bae6fd; border-radius: 999px; padding: 8px 16px; font-size: 0.88rem; font-weight: 700; cursor: pointer; display: inline-flex; align-items: center; gap: 6px;">
             🔷 Paytm
           </button>
+        </div>
+
+        <!-- SECURITY DECLINE HELP NOTE -->
+        <div style="background: #f8fafc; border: 1px dashed #cbd5e1; border-radius: 10px; padding: 10px 14px; margin-bottom: 14px; text-align: left; font-size: 0.78rem; color: #475569; line-height: 1.4;">
+          💡 <b>ସୂଚନା:</b> ଯଦି PhonePe ରେ <i>"Declined for security reasons"</i> ଆସୁଛି, ତେବେ ତଳେ ଥିବା <b>QR କୋଡ୍ ସ୍କାନ୍</b> କରନ୍ତୁ କିମ୍ବା <b>UPI ID Copy</b> କରି ପେମେଣ୍ଟ୍ କରନ୍ତୁ (ଆପଣ ନିଜ ଫୋନରୁ ନିଜ ଆକାଉଣ୍ଟକୁ ପେ କଲେ PhonePe ବ୍ଲକ୍ କରିଥାଏ)।
         </div>
 
         <!-- UPI ID COPY WIDGET -->

@@ -153,6 +153,31 @@ def init_db():
         conn.commit()
     except Exception:
         pass
+    try:
+        c.execute("ALTER TABLE jobs ADD COLUMN smbupi_upi_url TEXT DEFAULT ''")
+        conn.commit()
+    except Exception:
+        pass
+    try:
+        c.execute("ALTER TABLE jobs ADD COLUMN smbupi_binance_url TEXT DEFAULT ''")
+        conn.commit()
+    except Exception:
+        pass
+    try:
+        c.execute("ALTER TABLE jobs ADD COLUMN smbupi_token TEXT DEFAULT ''")
+        conn.commit()
+    except Exception:
+        pass
+    try:
+        c.execute("ALTER TABLE jobs ADD COLUMN payment_method TEXT DEFAULT ''")
+        conn.commit()
+    except Exception:
+        pass
+    try:
+        c.execute("ALTER TABLE jobs ADD COLUMN payment_utr TEXT DEFAULT ''")
+        conn.commit()
+    except Exception:
+        pass
     
     # 2. Print Jobs table
     c.execute("""
@@ -222,6 +247,16 @@ def init_db():
     except Exception:
         pass
     try:
+        c.execute("ALTER TABLE renewal_requests ADD COLUMN upi_url TEXT DEFAULT ''")
+        conn.commit()
+    except Exception:
+        pass
+    try:
+        c.execute("ALTER TABLE renewal_requests ADD COLUMN binance_url TEXT DEFAULT ''")
+        conn.commit()
+    except Exception:
+        pass
+    try:
         c.execute("ALTER TABLE renewal_requests ADD COLUMN gateway TEXT DEFAULT 'smbupi'")
         conn.commit()
     except Exception:
@@ -239,14 +274,23 @@ def init_db():
         "superadmin_upi_id": "9937037131@ybl",
         "superadmin_upi_name": "Smart Print Super Admin",
         "free_trial_days": "180",
-        "superadmin_smbupi_api_key": "",
-        "superadmin_smbupi_api_secret": "",
-        "superadmin_smbupi_webhook_secret": "",
-        "superadmin_smbupi_enabled": "0"
+        "superadmin_smbupi_api_key": "pi_live_456b3363195c823e1ee796f0853a53ed034f261844d50674",
+        "superadmin_smbupi_api_secret": "sk_live_78e53dfd1bf9e3776b5226930ed4de930dc9069440ea6ee0",
+        "superadmin_smbupi_webhook_secret": "sk_live_78e53dfd1bf9e3776b5226930ed4de930dc9069440ea6ee0",
+        "superadmin_smbupi_enabled": "1"
     }
     
     for k, v in defaults.items():
         c.execute("INSERT OR IGNORE INTO saas_settings (key, value) VALUES (?, ?)", (k, v))
+    
+    # Ensure superadmin smbupi credentials are set if previously empty
+    try:
+        c.execute("UPDATE saas_settings SET value = 'pi_live_456b3363195c823e1ee796f0853a53ed034f261844d50674' WHERE key = 'superadmin_smbupi_api_key' AND (value = '' OR value IS NULL)")
+        c.execute("UPDATE saas_settings SET value = 'sk_live_78e53dfd1bf9e3776b5226930ed4de930dc9069440ea6ee0' WHERE key = 'superadmin_smbupi_api_secret' AND (value = '' OR value IS NULL)")
+        c.execute("UPDATE saas_settings SET value = '1' WHERE key = 'superadmin_smbupi_enabled' AND (value = '0' OR value = '' OR value IS NULL)")
+        conn.commit()
+    except Exception:
+        pass
 
     # Clean any legacy pre-seeded default demo keys from database
     try:
@@ -490,7 +534,7 @@ def update_job_status(job_id, updates):
     c = conn.cursor()
     fields = []
     values = []
-    for k in ["num_pages_to_print", "copies", "color_mode", "print_side", "rate_per_page", "total_amount", "payment_status", "print_status", "print_error", "paytm_txn_id", "phonepe_order_id", "phonepe_redirect_url", "smbupi_payment_url"]:
+    for k in ["num_pages_to_print", "copies", "color_mode", "print_side", "rate_per_page", "total_amount", "payment_status", "print_status", "print_error", "paytm_txn_id", "phonepe_order_id", "phonepe_redirect_url", "smbupi_payment_url", "smbupi_upi_url", "smbupi_binance_url", "smbupi_token", "payment_method", "payment_utr"]:
         if k in updates:
             fields.append(f"{k} = ?")
             values.append(updates[k])
@@ -731,15 +775,15 @@ def superadmin_delete_shop(shop_id):
 
 # ---------- SUBSCRIPTION & RENEWAL FUNCTIONS ----------
 
-def create_subscription_order(shop_id, plan_code, plan_name, amount, duration_days, order_id, payment_url="", gateway="smbupi"):
+def create_subscription_order(shop_id, plan_code, plan_name, amount, duration_days, order_id, payment_url="", upi_url="", binance_url="", gateway="smbupi"):
     conn = get_connection()
     c = conn.cursor()
     now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     c.execute("""
     INSERT INTO renewal_requests (
-        shop_id, plan_code, plan_name, amount, duration_days, order_id, payment_url, gateway, status, created_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?)
-    """, (shop_id, plan_code, plan_name, amount, duration_days, order_id, payment_url, gateway, now_str))
+        shop_id, plan_code, plan_name, amount, duration_days, order_id, payment_url, upi_url, binance_url, gateway, status, created_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?)
+    """, (shop_id, plan_code, plan_name, amount, duration_days, order_id, payment_url, upi_url, binance_url, gateway, now_str))
     conn.commit()
     conn.close()
     return get_subscription_order(order_id)

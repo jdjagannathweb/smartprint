@@ -20,15 +20,15 @@ def generate_upi_uri(upi_id: str, merchant_name: str, amount: float, order_id: s
     """
     clean_vpa = upi_id.strip()
     clean_pn = clean_ascii_text(merchant_name, "Smart Print")
-    clean_tn = f"Order_{re.sub(r'[^a-zA-Z0-9]', '', order_id)}"
+    clean_id = re.sub(r'[^a-zA-Z0-9]', '', order_id)[-6:]
+    clean_tn = f"Print{clean_id}"
 
     params = [
         ("pa", clean_vpa),
         ("pn", clean_pn),
         ("am", f"{amount:.2f}"),
         ("cu", "INR"),
-        ("tn", clean_tn),
-        ("mode", "02")
+        ("tn", clean_tn)
     ]
     query_string = urllib.parse.urlencode(params)
     return f"upi://pay?{query_string}"
@@ -232,27 +232,57 @@ def create_smbupi_order(
     api_secret: str,
     amount: float,
     order_id: str,
+    currency: str = "INR",
+    provider: str = "auto",
     callback_url: str = "",
+    webhook_url: str = "",
+    website: str = "",
     customer_name: str = "SmartPrint Customer",
     customer_mobile: str = "9999999999",
     description: str = "SmartPrint Document"
 ) -> dict:
     """
-    Creates an SMB UPI (smbupi.com) payment order.
-    Returns: {"success": bool, "payment_url": str, "order_id": str, "token": str, "error": str}
+    Creates an SMB UPI (Universal Dual-Currency Gateway: UPI & Binance Pay) payment order.
+    Supports both INR (UPI) and USDT (Binance Pay) with instant peer settlement.
+    Returns: {
+        "success": bool,
+        "payment_url": str,
+        "upi_url": str,
+        "binance_url": str,
+        "upi_intent": str,
+        "qr_data": str,
+        "order_id": str,
+        "token": str,
+        "amount": float,
+        "currency": str,
+        "provider": str,
+        "error": str
+    }
     """
     import json
     import urllib.request
+    import urllib.error
 
     clean_order_id = re.sub(r'[^a-zA-Z0-9_-]', '', order_id)
+    curr_upper = (currency or "INR").strip().upper()
+    prov_lower = (provider or "auto").strip().lower()
+
     payload = {
-        "amount": f"{amount:.2f}",
+        "amount": round(float(amount), 2),
+        "currency": curr_upper,
+        "provider": prov_lower,
         "order_id": clean_order_id,
         "customer_name": clean_ascii_text(customer_name, "Customer"),
         "customer_mobile": customer_mobile or "9999999999",
-        "description": clean_ascii_text(description, "Print Order"),
-        "callback_url": callback_url or ""
+        "description": clean_ascii_text(description, "Print Order")
     }
+
+    if callback_url:
+        payload["callback_url"] = callback_url
+    if webhook_url:
+        payload["webhook_url"] = webhook_url
+    if website:
+        payload["website"] = website
 
     try:
         req = urllib.request.Request(
@@ -266,30 +296,62 @@ def create_smbupi_order(
                 "Accept": "application/json, text/plain, */*"
             }
         )
-        with urllib.request.urlopen(req, timeout=12) as response:
+        with urllib.request.urlopen(req, timeout=15) as response:
             res_data = json.loads(response.read().decode("utf-8"))
             if res_data.get("status") == "success":
                 data = res_data.get("data", {})
+                token = data.get("token", "")
+                payment_url = data.get("payment_url") or (f"https://smbupi.com/pay/{token}" if token else "")
+                upi_url = data.get("upi_url") or payment_url
+                binance_url = data.get("binance_url") or (f"https://smbupi.com/pay/binance?token={token}&order_id={clean_order_id}" if token else "")
+                
                 return {
                     "success": True,
-                    "payment_url": data.get("payment_url", ""),
+                    "payment_url": payment_url,
+                    "upi_url": upi_url,
+                    "binance_url": binance_url,
+                    "upi_intent": data.get("upi_intent", ""),
+                    "qr_data": data.get("qr_data", ""),
                     "order_id": data.get("order_id", clean_order_id),
-                    "token": data.get("token", "")
+                    "token": token,
+                    "amount": float(data.get("amount") or amount),
+                    "currency": data.get("currency", curr_upper),
+                    "provider": data.get("provider", prov_lower)
                 }
             return {
                 "success": False,
                 "error": res_data.get("error") or res_data.get("message") or "Failed to create SMB UPI order"
             }
+    except urllib.error.HTTPError as he:
+        try:
+            err_body = he.read().decode("utf-8")
+            err_json = json.loads(err_body)
+            msg = err_json.get("message") or err_json.get("error") or str(he)
+        except Exception:
+            msg = str(he)
+        return {"success": False, "error": msg}
     except Exception as e:
         return {"success": False, "error": str(e)}
 
 def check_smbupi_order_status(api_key: str, api_secret: str, order_id: str) -> dict:
     """
     Checks order status against SMB UPI (smbupi.com) Check Status API.
-    Returns: {"success": bool, "status": "success"|"pending"|"failed"|"error", "order_id": str, "utr": str, "amount": float, "error": str}
+    Returns: {
+        "success": bool,
+        "status": "success" | "pending" | "failed" | "error",
+        "order_id": str,
+        "utr": str,
+        "payment_method": "UPI" | "BINANCE_PAY",
+        "currency": "INR" | "USDT",
+        "provider": str,
+        "amount": float,
+        "paid_at": str,
+        "error": str
+    }
     """
     import json
     import urllib.request
+    import urllib.error
 
     clean_order_id = re.sub(r'[^a-zA-Z0-9_-]', '', order_id)
     payload = {
@@ -308,23 +370,57 @@ def check_smbupi_order_status(api_key: str, api_secret: str, order_id: str) -> d
                 "Accept": "application/json, text/plain, */*"
             }
         )
-        with urllib.request.urlopen(req, timeout=10) as response:
+        with urllib.request.urlopen(req, timeout=12) as response:
             res_data = json.loads(response.read().decode("utf-8"))
             if res_data.get("status") == "success":
                 data = res_data.get("data", {})
-                payment_status = (data.get("payment_status") or "").lower()
-                is_success = (payment_status == "success")
+                raw_status = (data.get("status") or data.get("payment_status") or "").lower()
+                is_paid = bool(res_data.get("is_paid") or raw_status in ["success", "paid", "completed"])
+                final_status = "success" if is_paid else (raw_status or "pending")
+
                 return {
-                    "success": is_success,
-                    "status": payment_status or "pending",
+                    "success": is_paid,
+                    "status": final_status,
                     "order_id": data.get("order_id", clean_order_id),
                     "utr": data.get("utr", ""),
-                    "amount": float(data.get("amount") or 0.0)
+                    "payment_method": (data.get("payment_method") or data.get("payment_mode") or "UPI").upper(),
+                    "currency": (data.get("currency") or "INR").upper(),
+                    "provider": data.get("provider", ""),
+                    "amount": float(data.get("amount") or 0.0),
+                    "paid_at": data.get("paid_at") or "",
+                    "raw": data
                 }
             return {
                 "success": False,
                 "status": "error",
-                "error": res_data.get("error") or res_data.get("message") or "Failed to query SMB UPI order status"
+                "error": res_data.get("error") or res_data.get("message") or "Failed to query SMB order status"
             }
+    except urllib.error.HTTPError as he:
+        if he.code == 404:
+            # Order not created or still initializing
+            return {"success": False, "status": "pending", "order_id": clean_order_id, "utr": "", "amount": 0.0}
+        try:
+            err_body = he.read().decode("utf-8")
+            err_json = json.loads(err_body)
+            msg = err_json.get("message") or err_json.get("error") or str(he)
+        except Exception:
+            msg = str(he)
+        return {"success": False, "status": "error", "error": msg}
     except Exception as e:
         return {"success": False, "status": "error", "error": str(e)}
+
+def verify_smbupi_webhook_signature(raw_body: bytes, signature: str, api_secret: str) -> bool:
+    """
+    Verifies HMAC-SHA256 signature from X-PayIndia-Signature or X-Webhook-Signature.
+    Formula: HMAC-SHA256(raw_body, api_secret)
+    """
+    import hmac
+    import hashlib
+    if not signature or not api_secret:
+        return False
+    try:
+        expected = hmac.new(api_secret.strip().encode("utf-8"), raw_body, hashlib.sha256).hexdigest()
+        return hmac.compare_digest(expected.lower(), signature.strip().lower())
+    except Exception:
+        return False
+

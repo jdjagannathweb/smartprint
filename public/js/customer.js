@@ -381,10 +381,9 @@ async function proceedToPayment() {
       phonepePollInterval = null;
     }
 
-    // SMB UPI (smbupi.com 0% Fee Gateway) Auto-Verification
-    const isSmbUpi = Boolean(currentJob.is_smbupi_auto && currentJob.smbupi_pay_url);
+    // SMB UPI (Universal Dual-Currency Gateway: UPI & Binance Pay)
+    const isSmbUpi = Boolean(currentJob.is_smbupi_auto && (currentJob.smbupi_pay_url || currentJob.smbupi_upi_url));
     const smbupiBox = document.getElementById("smbupiAutoDetectBox");
-    const smbupiBtn = document.getElementById("btnSmbUpiPay");
     if (smbupiBox) {
       smbupiBox.style.display = isSmbUpi ? "block" : "none";
     }
@@ -397,8 +396,8 @@ async function proceedToPayment() {
 
     // Determine optimal UPI payment URL
     let targetPayUrl = "";
-    if (isSmbUpi && currentJob.smbupi_pay_url) {
-      targetPayUrl = currentJob.smbupi_pay_url;
+    if (isSmbUpi && currentJob.smbupi_upi_url) {
+      targetPayUrl = currentJob.smbupi_upi_url;
     } else if (isPhonePe && currentJob.phonepe_pay_url) {
       targetPayUrl = currentJob.phonepe_pay_url;
     } else if (currentJob.upi_uri) {
@@ -412,8 +411,9 @@ async function proceedToPayment() {
 
     setStep(3);
 
-    // AUTOMATICALLY OPEN UPI APP / GATEWAY
-    if (targetPayUrl) {
+    // AUTOMATICALLY OPEN UPI APP / GATEWAY ON MOBILE
+    const isMobileDevice = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+    if (targetPayUrl && isMobileDevice) {
       const redirectNotice = document.getElementById("autoRedirectNotice");
       if (redirectNotice) {
         redirectNotice.style.display = "block";
@@ -431,21 +431,52 @@ async function proceedToPayment() {
 function triggerPayApp(target) {
   if (!currentJob) return;
 
-  // 1. If SMB UPI Gateway is enabled:
-  if (currentJob.is_smbupi_auto && currentJob.smbupi_pay_url) {
-    window.location.href = currentJob.smbupi_pay_url;
-    return;
+  // 1. Direct Binance Pay selection (Crypto USDT)
+  if (target === "smbupi_binance") {
+    const binanceUrl = currentJob.smbupi_binance_url || 
+      (currentJob.smbupi_token ? `https://smbupi.com/pay/binance?token=${currentJob.smbupi_token}&order_id=${currentJob.id}` : "");
+    if (binanceUrl) {
+      window.open(binanceUrl, "_blank");
+      return;
+    }
   }
 
-  // 2. If PhonePe Gateway is enabled:
-  if (currentJob.is_phonepe_auto && currentJob.phonepe_pay_url) {
+  // 2. Direct SMB UPI Checkout selection
+  if (target === "smbupi_upi" || target === "smbupi") {
+    const upiPayUrl = currentJob.smbupi_upi_url || currentJob.smbupi_payment_url;
+    if (upiPayUrl) {
+      window.location.href = upiPayUrl;
+      return;
+    }
+  }
+
+  // 3. If PhonePe Gateway is enabled:
+  if (target === "phonepe_checkout" || (currentJob.is_phonepe_auto && currentJob.phonepe_pay_url && target === "auto")) {
     window.location.href = currentJob.phonepe_pay_url;
     return;
   }
 
-  // 3. Direct UPI Intent
+  // 4. Mobile 1-Click App Intent or Custom UPI Intent
   const upi = currentJob.upi_uri || "";
+  if (target === "auto") {
+    const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+    if (!isMobile) return;
+    if (currentJob.is_smbupi_auto && currentJob.smbupi_upi_url) {
+      window.location.href = currentJob.smbupi_upi_url;
+      return;
+    }
+    if (upi) {
+      window.location.href = upi;
+      return;
+    }
+    return;
+  }
+
   if (!upi) {
+    if (currentJob.smbupi_payment_url) {
+      window.location.href = currentJob.smbupi_payment_url;
+      return;
+    }
     alert("UPI Payment ଲିଙ୍କ୍ ପ୍ରସ୍ତୁତ ହୋଇପାରିଲା ନାହିଁ। ଦୟାକରି QR କୋଡ୍ ସ୍କାନ୍ କରନ୍ତୁ କିମ୍ବା UPI ID କପି କରନ୍ତୁ।");
     return;
   }

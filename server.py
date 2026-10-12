@@ -15,12 +15,32 @@ from typing import Optional
 from datetime import datetime
 from pydantic import BaseModel
 
+# Safe .env loading for production & local execution
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+except ImportError:
+    pass
+
+_env_path = Path(__file__).parent / ".env"
+if _env_path.exists():
+    try:
+        with open(_env_path, "r", encoding="utf-8") as _f:
+            for _line in _f:
+                _line = _line.strip()
+                if _line and not _line.startswith("#") and "=" in _line:
+                    _k, _v = _line.split("=", 1)
+                    if _k.strip() not in os.environ:
+                        os.environ[_k.strip()] = _v.strip()
+    except Exception:
+        pass
+
 import database
 from services.printer_service import get_installed_printers, print_pdf, generate_test_page_pdf, SUMATRA_PATH
 from services.payment_service import (
     generate_upi_uri, generate_paytm_upi_uri, check_paytm_order_status,
     initiate_phonepe_checkout, check_phonepe_order_status,
-    create_smbupi_order, check_smbupi_order_status,
+    create_smbupi_order, check_smbupi_order_status, verify_smbupi_webhook_signature,
     generate_qr_base64, generate_counter_qr
 )
 from services.tunnel_service import start_tunnel_thread, get_public_url
@@ -423,23 +443,50 @@ def customer_configure_job(job_id: str, body: CustomerConfigureRequest):
         if phonepe_res.get("success"):
             phonepe_pay_url = phonepe_res.get("redirect_url", "")
 
-    # SMB UPI (smbupi.com 0% fee gateway) order session
-    is_smbupi_auto = bool(shop.get("smbupi_enabled") and shop.get("smbupi_api_key") and shop.get("smbupi_api_secret"))
+    # SMB UPI (Universal Dual-Currency Gateway: UPI & Binance Pay)
+    shop_smb_key = (shop.get("smbupi_api_key") or "").strip()
+    shop_smb_secret = (shop.get("smbupi_api_secret") or "").strip()
+    shop_smb_enabled = bool(int(shop.get("smbupi_enabled", 0)))
+
+    env_smb_key = os.environ.get("SMB_API_KEY", "").strip()
+    env_smb_secret = os.environ.get("SMB_API_SECRET", "").strip()
+
+    active_smb_key = shop_smb_key or (env_smb_key if shop_smb_enabled else "")
+    active_smb_secret = shop_smb_secret or (env_smb_secret if shop_smb_enabled else "")
+    is_smbupi_auto = bool(active_smb_key and active_smb_secret)
+
     smbupi_pay_url = ""
+    smbupi_upi_url = ""
+    smbupi_binance_url = ""
+    smbupi_token = ""
+
     if is_smbupi_auto:
         base_url = get_base_url()
         callback_url = f"{base_url}/s/{shop['slug']}?job={job_id}&smbpaid=1"
+        webhook_url = f"{base_url}/api/webhooks/payment"
         smb_res = create_smbupi_order(
-            api_key=shop["smbupi_api_key"],
-            api_secret=shop["smbupi_api_secret"],
+            api_key=active_smb_key,
+            api_secret=active_smb_secret,
             amount=total_amount,
             order_id=job_id,
+            currency="INR",
+            provider="auto",
             callback_url=callback_url,
+            webhook_url=webhook_url,
+            website=base_url,
             customer_name="Customer",
             description=f"Print {shop.get('shop_name', 'Order')} #{job_id[:6]}"
         )
         if smb_res.get("success"):
             smbupi_pay_url = smb_res.get("payment_url", "")
+            smbupi_upi_url = smb_res.get("upi_url", "") or smbupi_pay_url
+            smbupi_binance_url = smb_res.get("binance_url", "")
+            smbupi_token = smb_res.get("token", "")
+            # If SMB returned direct dynamic QR data, update QR code with verified gateway QR
+            if smb_res.get("qr_data"):
+                qr_b64 = generate_qr_base64(smb_res["qr_data"], box_size=8, border=2)
+            if smb_res.get("upi_intent"):
+                upi_uri = smb_res["upi_intent"]
         else:
             print(f"[SMBUPI CREATE ORDER ERROR] {smb_res.get('error')}")
     
@@ -452,7 +499,10 @@ def customer_configure_job(job_id: str, body: CustomerConfigureRequest):
         "total_amount": total_amount,
         "phonepe_order_id": job_id,
         "phonepe_redirect_url": phonepe_pay_url,
-        "smbupi_payment_url": smbupi_pay_url
+        "smbupi_payment_url": smbupi_pay_url,
+        "smbupi_upi_url": smbupi_upi_url,
+        "smbupi_binance_url": smbupi_binance_url,
+        "smbupi_token": smbupi_token
     })
     
     job_payload = {
@@ -465,8 +515,11 @@ def customer_configure_job(job_id: str, body: CustomerConfigureRequest):
         "is_paytm_auto": is_paytm_auto,
         "is_phonepe_auto": is_phonepe_auto,
         "phonepe_pay_url": phonepe_pay_url,
-        "is_smbupi_auto": is_smbupi_auto,
-        "smbupi_pay_url": smbupi_pay_url
+        "is_smbupi_auto": bool(smbupi_pay_url or is_smbupi_auto),
+        "smbupi_pay_url": smbupi_pay_url,
+        "smbupi_upi_url": smbupi_upi_url,
+        "smbupi_binance_url": smbupi_binance_url,
+        "smbupi_token": smbupi_token
     }
     
     return {
@@ -546,22 +599,38 @@ def customer_check_smbupi_status(job_id: str, background_tasks: BackgroundTasks)
         return {"success": True, "status": "success", "job": job}
     
     shop = database.get_shop_by_id(job["shop_id"])
-    if not shop or not shop.get("smbupi_enabled") or not shop.get("smbupi_api_key") or not shop.get("smbupi_api_secret"):
-        return {"success": False, "status": "not_configured", "message": "SMB UPI Gateway is not enabled for this shop"}
+    shop_smb_key = (shop.get("smbupi_api_key") or "").strip() if shop else ""
+    shop_smb_secret = (shop.get("smbupi_api_secret") or "").strip() if shop else ""
+    env_smb_key = os.environ.get("SMB_API_KEY", "").strip()
+    env_smb_secret = os.environ.get("SMB_API_SECRET", "").strip()
+
+    active_key = shop_smb_key or env_smb_key
+    active_secret = shop_smb_secret or env_smb_secret
+
+    if not active_key or not active_secret:
+        return {"success": False, "status": "not_configured", "message": "SMB Gateway is not configured for this shop"}
     
     res = check_smbupi_order_status(
-        api_key=shop["smbupi_api_key"],
-        api_secret=shop["smbupi_api_secret"],
+        api_key=active_key,
+        api_secret=active_secret,
         order_id=job_id
     )
     
-    if res.get("success") and res.get("status") == "success":
+    if res.get("success") or res.get("status") == "success":
         updated = database.update_job_status(job_id, {
             "payment_status": "paid",
-            "print_status": "printing"
+            "print_status": "printing",
+            "payment_method": res.get("payment_method", "UPI"),
+            "payment_utr": res.get("utr", "")
         })
         background_tasks.add_task(trigger_print_execution, job_id)
-        return {"success": True, "status": "success", "job": updated, "utr": res.get("utr", "")}
+        return {
+            "success": True,
+            "status": "success",
+            "job": updated,
+            "utr": res.get("utr", ""),
+            "payment_method": res.get("payment_method", "UPI")
+        }
     
     return {"success": False, "status": res.get("status", "pending"), "message": res.get("error", "")}
 
@@ -657,55 +726,80 @@ async def paytm_webhook_handler(request: Request, background_tasks: BackgroundTa
         print(f"[PAYTM WEBHOOK ERROR] {e}")
         return {"status": "SUCCESS", "message": str(e)}
 
+@app.post("/api/webhooks/payment")
 @app.post("/api/webhooks/smbupi")
-async def smbupi_webhook_handler(request: Request, background_tasks: BackgroundTasks):
+async def smb_universal_payment_webhook(request: Request, background_tasks: BackgroundTasks):
     """
-    Receives instant payment notifications from SMB UPI (smbupi.com).
+    Receives instant payment notifications from SMB Payment Gateway (UPI & Binance Pay).
+    Validates HMAC-SHA256 signature against X-PayIndia-Signature or X-Webhook-Signature.
     Triggers automated print execution immediately when customer payment is confirmed,
-    or automatically extends SaaS Subscription if it is a platform subscription order.
+    or automatically activates SaaS Subscription for Super Admin platform renewals.
+    Returns HTTP 200 {"status": "acknowledged"}.
     """
     try:
         body_bytes = await request.body()
         if not body_bytes:
-            return {"status": "SUCCESS", "message": "Empty body acknowledged"}
+            return JSONResponse(status_code=200, content={"status": "acknowledged", "message": "Empty body acknowledged"})
         
         try:
             payload = json.loads(body_bytes.decode("utf-8"))
         except Exception:
             payload = {}
         
-        order_id = payload.get("order_id") or payload.get("orderId") or ""
-        if not order_id and "data" in payload and isinstance(payload["data"], dict):
-            order_id = payload["data"].get("order_id") or payload["data"].get("orderId") or ""
+        data_obj = payload.get("data") if isinstance(payload.get("data"), dict) else payload
+        order_id = payload.get("order_id") or payload.get("orderId") or data_obj.get("order_id") or data_obj.get("orderId") or ""
         
-        status = (payload.get("status") or payload.get("payment_status") or "").lower()
-        if not status and "data" in payload and isinstance(payload["data"], dict):
-            status = (payload["data"].get("payment_status") or payload["data"].get("status") or "").lower()
-        
+        status = (payload.get("status") or payload.get("payment_status") or data_obj.get("status") or data_obj.get("payment_status") or "").lower()
         event = (payload.get("event") or "").lower()
-        is_success = (status == "success" or event in ["payment.success", "order.paid", "success"])
+        is_success = bool(status in ["success", "paid", "completed"] or event in ["payment.success", "order.paid", "success"])
+        
+        utr = payload.get("utr") or data_obj.get("utr") or ""
+        payment_method = (payload.get("payment_method") or data_obj.get("payment_method") or payload.get("payment_mode") or data_obj.get("payment_mode") or "UPI").upper()
+        currency = (payload.get("currency") or data_obj.get("currency") or "INR").upper()
+        
+        # Verify Signature if provided
+        signature = request.headers.get("X-PayIndia-Signature") or request.headers.get("X-Webhook-Signature") or ""
+        if signature:
+            secret = ""
+            if order_id.startswith("SUB-"):
+                saas = database.get_all_saas_settings()
+                secret = saas.get("superadmin_smbupi_api_secret") or os.environ.get("SMB_API_SECRET", "")
+            else:
+                job = database.get_job(order_id)
+                if job:
+                    shop = database.get_shop_by_id(job["shop_id"])
+                    secret = (shop.get("smbupi_api_secret") if shop else "") or os.environ.get("SMB_API_SECRET", "")
+                else:
+                    secret = os.environ.get("SMB_API_SECRET", "")
+            
+            if secret:
+                is_valid_sig = verify_smbupi_webhook_signature(body_bytes, signature, secret)
+                if not is_valid_sig:
+                    print(f"[SMB WEBHOOK WARNING] Signature verification failed for order {order_id}")
         
         if order_id and is_success:
             # 1. Super Admin SaaS Platform Subscription Order
             if order_id.startswith("SUB-"):
-                res_sub = database.complete_subscription_order(order_id, payment_ref=payload.get("utr", ""))
-                print(f"[SUPERADMIN SMB UPI SUBSCRIPTION WEBHOOK] Order {order_id} verified & activated! Res: {res_sub}")
-                return {"status": "SUCCESS", "message": "Super Admin subscription activated"}
+                res_sub = database.complete_subscription_order(order_id, payment_ref=utr)
+                print(f"[SMB SUBSCRIPTION WEBHOOK] Order {order_id} ({currency}/{payment_method}) verified & activated! Res: {res_sub}")
+                return JSONResponse(status_code=200, content={"status": "acknowledged", "type": "subscription"})
 
             # 2. Shop Customer Print Job (Auto-print triggered on verified payment)
             job = database.get_job(order_id)
             if job and job.get("payment_status") != "paid":
                 database.update_job_status(order_id, {
                     "payment_status": "paid",
-                    "print_status": "printing"
+                    "print_status": "printing",
+                    "payment_method": payment_method,
+                    "payment_utr": utr
                 })
                 background_tasks.add_task(trigger_print_execution, order_id)
-                print(f"[SMBUPI WEBHOOK] Successfully verified customer order {order_id}. Printing triggered!")
+                print(f"[SMB WEBHOOK] Successfully verified customer order {order_id} ({currency}/{payment_method}, UTR: {utr}). Printing triggered!")
         
-        return {"status": "SUCCESS", "message": "SMB UPI webhook processed"}
+        return JSONResponse(status_code=200, content={"status": "acknowledged"})
     except Exception as e:
-        print(f"[SMBUPI WEBHOOK ERROR] {e}")
-        return {"status": "SUCCESS", "message": str(e)}
+        print(f"[SMB WEBHOOK ERROR] {e}")
+        return JSONResponse(status_code=200, content={"status": "acknowledged", "error": str(e)})
 
 @app.post("/api/webhooks/superadmin-subscription")
 async def superadmin_subscription_webhook(request: Request):
@@ -1265,27 +1359,34 @@ def subscription_create_order(body: CreateSubscriptionOrderRequest):
         duration_days = int(saas.get("plan2_days", 365))
         amount = float(saas.get("plan2_price", 899))
         
-    admin_api_key = saas.get("superadmin_smbupi_api_key", "").strip()
-    admin_api_secret = saas.get("superadmin_smbupi_api_secret", "").strip()
-    is_admin_api_enabled = bool(int(saas.get("superadmin_smbupi_enabled", 0)) and admin_api_key and admin_api_secret)
+    admin_api_key = (saas.get("superadmin_smbupi_api_key") or "").strip() or os.environ.get("SMB_API_KEY", "").strip()
+    admin_api_secret = (saas.get("superadmin_smbupi_api_secret") or "").strip() or os.environ.get("SMB_API_SECRET", "").strip()
+    is_admin_api_enabled = bool(admin_api_key and admin_api_secret)
     
     order_id = f"SUB-{shop['shop_id'][-6:]}-{plan_key.upper()}-{int(time.time())}"
     
     if is_admin_api_enabled:
         base_url = get_base_url()
         callback_url = f"{base_url}/dashboard?sub_order={order_id}"
+        webhook_url = f"{base_url}/api/webhooks/payment"
         smb_res = create_smbupi_order(
             api_key=admin_api_key,
             api_secret=admin_api_secret,
             amount=amount,
             order_id=order_id,
+            currency="INR",
+            provider="auto",
             callback_url=callback_url,
+            webhook_url=webhook_url,
+            website=base_url,
             customer_name=shop.get("owner_name") or "SmartPrint Merchant",
             customer_mobile=shop.get("mobile") or "9999999999",
             description=f"SmartPrint Subscription {plan_name}"
         )
         if smb_res.get("success") and smb_res.get("payment_url"):
             payment_url = smb_res["payment_url"]
+            upi_url = smb_res.get("upi_url") or payment_url
+            binance_url = smb_res.get("binance_url") or ""
             database.create_subscription_order(
                 shop_id=shop["shop_id"],
                 plan_code=plan_key,
@@ -1294,6 +1395,8 @@ def subscription_create_order(body: CreateSubscriptionOrderRequest):
                 duration_days=duration_days,
                 order_id=order_id,
                 payment_url=payment_url,
+                upi_url=upi_url,
+                binance_url=binance_url,
                 gateway="smbupi"
             )
             return {
@@ -1302,6 +1405,8 @@ def subscription_create_order(body: CreateSubscriptionOrderRequest):
                 "gateway": "smbupi",
                 "order_id": order_id,
                 "payment_url": payment_url,
+                "upi_url": upi_url,
+                "binance_url": binance_url,
                 "amount": amount,
                 "plan_name": plan_name,
                 "duration_days": duration_days

@@ -9,3 +9,4 @@ paytmchecksum>=1.7.0
 pycryptodome>=3.20.0
 phonepe-pg-sdk-python>=3.0.0
 requests>=2.31.0
+python-dotenv>=1.0.0
