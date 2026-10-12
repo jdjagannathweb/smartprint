@@ -62,6 +62,13 @@ async function initShop() {
       document.getElementById("shopStandeeContainer").style.display = "block";
     }
 
+    // Check if customer returning from payment gateway with ?job=JOB-XXXX
+    const urlParams = new URLSearchParams(window.location.search);
+    const returnJobId = urlParams.get("job");
+    if (returnJobId) {
+      await resumeJobPaymentStatus(returnJobId);
+    }
+
   } catch (err) {
     console.error("Shop init error:", err);
     showInactiveShop("ସର୍ଭର ସହିତ ସଂଯୋଗ ହୋଇପାରିଲା ନାହିଁ।");
@@ -338,27 +345,17 @@ async function proceedToPayment() {
       vpaBox.style.display = "none";
     }
 
-    if (currentJob.upi_uri) {
-      document.getElementById("directUpiPayLink").href = currentJob.upi_uri;
-      document.getElementById("directUpiPayLink").style.display = "inline-flex";
-    } else {
-      document.getElementById("directUpiPayLink").style.display = "none";
-    }
-
     // Paytm Business 0% Auto-Verification
     const isPaytm = Boolean(currentJob.is_paytm_auto);
     const paytmBox = document.getElementById("paytmAutoDetectBox");
     if (paytmBox) {
       paytmBox.style.display = isPaytm ? "block" : "none";
     }
-
     if (isPaytm) {
       startPaytmAutoVerification(currentJob.id);
-    } else {
-      if (paytmPollInterval) {
-        clearInterval(paytmPollInterval);
-        paytmPollInterval = null;
-      }
+    } else if (paytmPollInterval) {
+      clearInterval(paytmPollInterval);
+      paytmPollInterval = null;
     }
 
     // PhonePe Standard Checkout Auto-Verification
@@ -371,14 +368,11 @@ async function proceedToPayment() {
     if (phonepeBtn && currentJob.phonepe_pay_url) {
       phonepeBtn.href = currentJob.phonepe_pay_url;
     }
-
     if (isPhonePe) {
       startPhonePeAutoVerification(currentJob.id);
-    } else {
-      if (phonepePollInterval) {
-        clearInterval(phonepePollInterval);
-        phonepePollInterval = null;
-      }
+    } else if (phonepePollInterval) {
+      clearInterval(phonepePollInterval);
+      phonepePollInterval = null;
     }
 
     // SMB UPI (smbupi.com 0% Fee Gateway) Auto-Verification
@@ -391,19 +385,88 @@ async function proceedToPayment() {
     if (smbupiBtn && currentJob.smbupi_pay_url) {
       smbupiBtn.href = currentJob.smbupi_pay_url;
     }
-
     if (isSmbUpi) {
       startSmbUpiAutoVerification(currentJob.id);
-    } else {
-      if (smbupiPollInterval) {
-        clearInterval(smbupiPollInterval);
-        smbupiPollInterval = null;
+    } else if (smbupiPollInterval) {
+      clearInterval(smbupiPollInterval);
+      smbupiPollInterval = null;
+    }
+
+    // Determine optimal UPI payment URL
+    let targetPayUrl = "";
+    if (isSmbUpi && currentJob.smbupi_pay_url) {
+      targetPayUrl = currentJob.smbupi_pay_url;
+    } else if (isPhonePe && currentJob.phonepe_pay_url) {
+      targetPayUrl = currentJob.phonepe_pay_url;
+    } else if (currentJob.upi_uri) {
+      targetPayUrl = currentJob.upi_uri;
+    }
+
+    const upiLinkBtn = document.getElementById("directUpiPayLink");
+    if (targetPayUrl) {
+      if (upiLinkBtn) {
+        upiLinkBtn.href = targetPayUrl;
+        upiLinkBtn.style.display = "inline-flex";
       }
+      setupQuickUpiChips(currentJob.upi_uri);
+    } else {
+      if (upiLinkBtn) upiLinkBtn.style.display = "none";
     }
 
     setStep(3);
+
+    // AUTOMATICALLY OPEN UPI APP / GATEWAY
+    if (targetPayUrl) {
+      const redirectNotice = document.getElementById("autoRedirectNotice");
+      if (redirectNotice) {
+        redirectNotice.style.display = "block";
+      }
+      setTimeout(() => {
+        window.location.href = targetPayUrl;
+      }, 500);
+    }
+
   } catch (err) {
     alert("ଭୁଲ୍: " + err.message);
+  }
+}
+
+function setupQuickUpiChips(upiUri) {
+  if (!upiUri) return;
+  const rawQuery = upiUri.includes("?") ? upiUri.split("?")[1] : upiUri.replace(/^upi:\/\/pay\?/, "");
+  const btnPhonepe = document.getElementById("quickPhonepeLink");
+  const btnGpay = document.getElementById("quickGpayLink");
+  const btnPaytm = document.getElementById("quickPaytmLink");
+
+  if (btnPhonepe) btnPhonepe.href = `phonepe://pay?${rawQuery}`;
+  if (btnGpay) btnGpay.href = `gpay://upi/pay?${rawQuery}`;
+  if (btnPaytm) btnPaytm.href = `paytmmp://pay?${rawQuery}`;
+}
+
+async function resumeJobPaymentStatus(jobId) {
+  try {
+    const res = await fetch(`/api/customer/jobs/${jobId}/status`);
+    if (!res.ok) return;
+    const job = await res.json();
+    currentJob = job;
+
+    if (job.payment_status === "paid" || job.print_status === "printed" || job.print_status === "printing") {
+      setStep(4);
+      document.getElementById("waitingTitle").textContent = "⚡ ପେମେଣ୍ଟ୍ ସଫଳ (Verified)!";
+      document.getElementById("waitingDesc").textContent = "ପେମେଣ୍ଟ୍ କନଫର୍ମ ହୋଇଛି! ପ୍ରିଣ୍ଟର୍ ରୁ କାଗଜ ବାହାରୁଛି...";
+      startPollingPrintStatus();
+    } else {
+      if (job.is_smbupi_auto || job.payment_method === "smbupi") {
+        startSmbUpiAutoVerification(job.id);
+      } else if (job.is_phonepe_auto || job.payment_method === "phonepe") {
+        startPhonePeAutoVerification(job.id);
+      } else if (job.is_paytm_auto || job.payment_method === "paytm_qr") {
+        startPaytmAutoVerification(job.id);
+      }
+      setStep(3);
+    }
+  } catch (e) {
+    console.error("Error resuming job payment status:", e);
   }
 }
 
@@ -607,3 +670,18 @@ function resetFlow() {
   document.getElementById("waitingDesc").textContent = "ଆପଣଙ୍କ ପେମେଣ୍ଟ୍ ସୂଚନା ଦୋକାନୀଙ୍କ ଡ୍ୟାସବୋର୍ଡରେ ଦେଖାଯାଉଛି। ସେ ଯାଞ୍ଚ କରି କନଫର୍ମ କଲେ ପ୍ରିଣ୍ଟର୍ ରୁ କାଗଜ ବାହାରିବ।";
   setStep(1);
 }
+
+function downloadPayQr() {
+  const qrImg = document.getElementById("payQrImage");
+  if (!qrImg || !qrImg.src) {
+    alert("⚠️ QR କୋଡ୍ ଲୋଡ୍ ହୋଇନାହିଁ!");
+    return;
+  }
+  const link = document.createElement("a");
+  link.href = qrImg.src;
+  link.download = `SmartPrint-Payment-${currentJob?.id || "order"}.png`;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+}
+

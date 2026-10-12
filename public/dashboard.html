@@ -177,6 +177,95 @@
 
     <!-- TAB 2: PRINTER SETUP & CONNECTOR -->
     <section id="tab-printer" style="display: none;">
+      <!-- PRINTER SELECTION & SWITCH CARD -->
+      <div class="card" style="border: 2px solid #0284c7; background: linear-gradient(135deg, #f0f9ff 0%, #ffffff 100%); margin-bottom: 24px; box-shadow: 0 4px 14px rgba(2, 132, 199, 0.08);">
+        <div style="display: flex; align-items: flex-start; justify-content: space-between; flex-wrap: wrap; gap: 12px; margin-bottom: 14px;">
+          <div style="display: flex; align-items: center; gap: 12px;">
+            <span style="font-size: 2.2rem;">🖨️</span>
+            <div>
+              <h3 style="color: #0369a1; margin: 0 0 4px;">ପ୍ରିଣ୍ଟର୍ ପରିବର୍ତ୍ତନ କରନ୍ତୁ (Change Active Printer)</h3>
+              <p style="color: #475569; font-size: 0.88rem; margin: 0;">
+                କମ୍ପ୍ୟୁଟରରେ ଲାଗିଥିବା ଯେକୌଣସି ପ୍ରିଣ୍ଟର୍ (Epson, HP, Canon, Brother ଇତ୍ୟାଦି) ଏଠାରୁ ବାଛନ୍ତୁ।
+              </p>
+            </div>
+          </div>
+          <div style="display: flex; align-items: center; gap: 8px;">
+            <span style="font-size: 0.82rem; color: #64748b; font-weight: 600;">ସକ୍ରିୟ ପ୍ରିଣ୍ଟର୍:</span>
+            <span id="currentActivePrinterPill" style="font-size: 0.85rem; font-weight: 800; background: #e0f2fe; color: #0369a1; padding: 4px 12px; border-radius: 999px; border: 1px solid #bae6fd;">
+              ସିଷ୍ଟମ୍ ଡିଫଲ୍ଟ ପ୍ରିଣ୍ଟର୍
+            </span>
+          </div>
+        </div>
+
+        <div style="background: #ffffff; border: 1.5px solid #cbd5e1; border-radius: 12px; padding: 18px 20px; margin-bottom: 16px;">
+          <!-- Primary Single Printer Selection -->
+          <div class="form-group" style="margin-bottom: 16px;">
+            <label style="font-size: 0.92rem; font-weight: 700; color: #1e293b; display: block; margin-bottom: 8px;">
+              📄 ମୁଖ୍ୟ ପ୍ରିଣ୍ଟର୍ ଚୟନ (Select Primary Printer):
+            </label>
+            <div style="display: flex; gap: 10px; flex-wrap: wrap; align-items: center;">
+              <select id="printerSelect" class="form-control" style="flex: 1; min-width: 260px; font-weight: 700; font-size: 0.96rem; padding: 10px 14px; border: 1.5px solid #94a3b8; border-radius: 8px;">
+                <option value="">(ସିଷ୍ଟମ୍ ଡିଫଲ୍ଟ ପ୍ରିଣ୍ଟର୍ - System Default)</option>
+              </select>
+              <button type="button" class="btn btn-outline" onclick="loadPrinters(true)" style="border-color: #0284c7; color: #0284c7; font-weight: 700; padding: 10px 16px; white-space: nowrap;">
+                🔄 ତାଲିକା ରିଫ୍ରେସ୍ (Refresh)
+              </button>
+            </div>
+            <small style="color: #64748b; font-size: 0.8rem; margin-top: 6px; display: block;">
+              💡 ଟିପ୍: PC ରେ Smart Print Windows App ଚାଲୁ ଥିଲେ ଆପଣଙ୍କ PC ର ସବୁ ପ୍ରିଣ୍ଟର୍ ନାମ ଏଠାରେ ସ୍ୱୟଂଚାଳିତ ଭାବେ ଦେଖାଯିବ।
+            </small>
+          </div>
+
+          <!-- Dual Printer Setup (Optional) -->
+          <div style="padding-top: 14px; border-top: 1px dashed #e2e8f0;">
+            <div style="display: flex; align-items: center; justify-content: space-between; cursor: pointer;" onclick="toggleDualPrinterOptions()">
+              <label style="font-size: 0.88rem; font-weight: 700; color: #334155; cursor: pointer; display: flex; align-items: center; gap: 8px;">
+                <input type="checkbox" id="chkEnableDualPrinter" onchange="toggleDualPrinterOptions(event)">
+                <span>🔀 ଉନ୍ନତ: ଦୁଇଟି ପ୍ରିଣ୍ଟର୍ ବ୍ୟବହାର (Dual-Printer Mode: B&W ଓ Color ଅଲଗା ପ୍ରିଣ୍ଟର୍)</span>
+              </label>
+              <span id="dualPrinterArrow" style="font-size: 0.8rem; color: #64748b;">▼</span>
+            </div>
+
+            <div id="dualPrinterBox" style="display: none; margin-top: 14px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; padding: 14px;">
+              <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 14px;">
+                <div>
+                  <label style="font-size: 0.84rem; font-weight: 700; color: #0f172a; display: block; margin-bottom: 4px;">
+                    ⚫ କଳା-ଧଳା ପ୍ରିଣ୍ଟର୍ (B&W Xerox Printer):
+                  </label>
+                  <select id="bwPrinterSelect" class="form-control" style="font-size: 0.9rem;">
+                    <option value="">(ମୁଖ୍ୟ ପ୍ରିଣ୍ଟର୍ ବ୍ୟବହାର କରନ୍ତୁ)</option>
+                  </select>
+                </div>
+                <div>
+                  <label style="font-size: 0.84rem; font-weight: 700; color: #831843; display: block; margin-bottom: 4px;">
+                    🎨 ରଙ୍ଗୀନ ପ୍ରିଣ୍ଟର୍ (Color Photo/Inkjet Printer):
+                  </label>
+                  <select id="colorPrinterSelect" class="form-control" style="font-size: 0.9rem;">
+                    <option value="">(ମୁଖ୍ୟ ପ୍ରିଣ୍ଟର୍ ବ୍ୟବହାର କରନ୍ତୁ)</option>
+                  </select>
+                </div>
+              </div>
+              <small style="color: #64748b; font-size: 0.78rem; margin-top: 8px; display: block;">
+                ଏହା ଅନ୍ କଲେ କଳା-ଧଳା ପ୍ରିଣ୍ଟ୍ କଳା-ଧଳା ପ୍ରିଣ୍ଟର୍ କୁ ଯିବ ଏବଂ କଲର୍ ପ୍ରିଣ୍ଟ୍ ରଙ୍ଗୀନ ପ୍ରିଣ୍ଟର୍ କୁ ସ୍ୱୟଂଚାଳିତ ଭାବେ ଚାଲିଯିବ।
+              </small>
+            </div>
+          </div>
+        </div>
+
+        <!-- Action Buttons -->
+        <div style="display: flex; gap: 12px; align-items: center; flex-wrap: wrap;">
+          <button type="button" id="btnSavePrinterChoice" class="btn btn-primary" onclick="savePrinterChoice()" style="background: #0284c7; border-color: #0284c7; padding: 12px 24px; font-weight: 800; font-size: 0.98rem; box-shadow: 0 2px 8px rgba(2, 132, 199, 0.25);">
+            💾 ପ୍ରିଣ୍ଟର୍ ସେଭ୍ କରନ୍ତୁ (Save Selected Printer)
+          </button>
+          <button type="button" id="btnTopTestPrint" onclick="triggerTestPrint()" class="btn btn-outline" style="border-color: #059669; color: #059669; font-weight: 700; padding: 12px 20px;">
+            🖨️ ଟେଷ୍ଟ୍ ପେଜ୍ ପ୍ରିଣ୍ଟ୍ କରନ୍ତୁ (Test Print)
+          </button>
+          <span id="printerSaveStatus" style="font-size: 0.88rem; font-weight: 700; color: #059669; display: none;">
+            ✅ ପ୍ରିଣ୍ଟର୍ ସଫଳତାର ସହ ସେଭ୍ ହେଲା!
+          </span>
+        </div>
+      </div>
+
       <!-- OFFICIAL WINDOWS DESKTOP APPLICATION CARD -->
       <div class="card" style="border: 2px solid #059669; background: linear-gradient(135deg, #ecfdf5 0%, #ffffff 100%); margin-bottom: 24px; box-shadow: 0 4px 12px rgba(5, 150, 105, 0.08);">
         <div style="display: flex; align-items: flex-start; gap: 16px; flex-wrap: wrap;">
@@ -579,20 +668,33 @@
 
     <!-- TAB 5: COUNTER QR POSTER -->
     <section id="tab-standee" style="display: none;">
-      <div class="card" style="text-align: center; max-width: 500px; margin: 0 auto;">
+      <div class="card" style="text-align: center; max-width: 520px; margin: 0 auto;">
         <h3>ଗ୍ରାହକଙ୍କ ପାଇଁ କାଉଣ୍ଟର୍ QR ପୋଷ୍ଟର୍</h3>
         <p style="color: var(--text-muted); font-size: 0.85rem; margin-bottom: 20px;">
-          ଏହି ପୋଷ୍ଟର୍ ଟି ପ୍ରିଣ୍ଟ୍ କରି ଦୋକାନ କାଉଣ୍ଟରରେ ଲଗାନ୍ତୁ। ଗ୍ରାହକ ମୋବାଇଲ୍ ରୁ ସ୍କାନ୍ କରି ଫାଇଲ୍ ପ୍ରିଣ୍ଟ୍ କରିପାରିବେ:
+          ଏହି ପୋଷ୍ଟର୍ ଟି ପ୍ରିଣ୍ଟ୍ କିମ୍ବା ଡାଉନଲୋଡ୍ କରି ଦୋକାନ କାଉଣ୍ଟରରେ ଲଗାନ୍ତୁ। ଗ୍ରାହକ ମୋବାଇଲ୍ ରୁ ସ୍କାନ୍ କରି ଫାଇଲ୍ ପ୍ରିଣ୍ଟ୍ କରିପାରିବେ:
         </p>
 
-        <div id="standeePrintArea" style="background: #fff; padding: 24px; border: 2px dashed #0284c7; border-radius: 16px; margin-bottom: 20px;">
+        <div id="standeePrintArea" style="background: #fff; padding: 24px; border: 2px dashed #0284c7; border-radius: 16px; margin-bottom: 20px; box-shadow: 0 4px 14px rgba(2, 132, 199, 0.08);">
           <h2 style="color: #0284c7; margin-bottom: 4px;" id="standeeShopTitle">ସ୍ମାର୍ଟ ପ୍ରିଣ୍ଟ୍ & ଜେରକ୍ସ</h2>
           <p style="font-size: 0.9rem; color: #475569; margin-bottom: 16px;">📲 ସ୍କାନ୍ କରନ୍ତୁ & ନିଜ ମୋବାଇଲ୍ ରୁ ପ୍ରିଣ୍ଟ୍ କରନ୍ତୁ</p>
-          <img id="standeeQrImg" src="" alt="Customer QR" style="width: 240px; height: 240px; border-radius: 12px; margin-bottom: 12px;">
-          <div style="font-weight: 700; font-size: 0.95rem; color: #0f172a;" id="standeeUrlText"></div>
+          <img id="standeeQrImg" src="" alt="Customer QR" style="width: 240px; height: 240px; border-radius: 12px; margin-bottom: 12px; border: 1px solid #e2e8f0; padding: 4px;">
+          <div style="font-weight: 700; font-size: 0.95rem; color: #0f172a; word-break: break-all;" id="standeeUrlText"></div>
+          <div style="font-size: 0.76rem; color: #059669; font-weight: 700; margin-top: 8px;">
+            ⚡ 0% Fee Instant UPI Auto-Print Enabled
+          </div>
         </div>
 
-        <button class="btn btn-primary" onclick="window.print()">🖨️ ଏହି ପୋଷ୍ଟର୍ ପ୍ରିଣ୍ଟ୍ କରନ୍ତୁ</button>
+        <div style="display: flex; gap: 10px; justify-content: center; flex-wrap: wrap;">
+          <button type="button" class="btn btn-primary" onclick="downloadCounterQr()" style="background: #059669; border-color: #059669; font-weight: 700; padding: 10px 18px;">
+            📥 QR କୋଡ୍ ଡାଉନଲୋଡ୍ (Download QR)
+          </button>
+          <button type="button" class="btn btn-primary" onclick="downloadPosterImage()" style="background: #0284c7; border-color: #0284c7; font-weight: 700; padding: 10px 18px;">
+            🖼️ ପୋଷ୍ଟର୍ ଡାଉନଲୋଡ୍ (Download Poster)
+          </button>
+          <button type="button" class="btn btn-outline" onclick="printCounterPoster()" style="font-weight: 700; padding: 10px 18px;">
+            🖨️ ଏବେ ପ୍ରିଣ୍ଟ୍ କରନ୍ତୁ (Print)
+          </button>
+        </div>
       </div>
     </section>
 

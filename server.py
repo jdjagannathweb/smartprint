@@ -792,7 +792,12 @@ def connector_poll_jobs(shop_id: str, token: str):
     """, (shop_id,))
     jobs = [dict(r) for r in c.fetchall()]
     conn.close()
-    return {"jobs": jobs}
+    return {
+        "jobs": jobs,
+        "selected_printer": shop.get("selected_printer", ""),
+        "bw_printer": shop.get("bw_printer", ""),
+        "color_printer": shop.get("color_printer", "")
+    }
 
 @app.get("/api/connector/download/{job_id}")
 def connector_download_pdf(job_id: str, token: str):
@@ -974,8 +979,21 @@ pause
     return PlainTextResponse(bat_content, media_type="text/plain", headers={"Content-Disposition": f"attachment; filename=change_printer_{shop['slug']}.bat"})
 
 @app.get("/api/printers")
-def list_printers():
-    return {"printers": get_installed_printers()}
+def list_printers(shop_id: Optional[str] = None):
+    # 1. Check if specific shop has active heartbeat with printers
+    if shop_id and shop_id in CONNECTOR_HEARTBEATS:
+        hb_printers = CONNECTOR_HEARTBEATS[shop_id].get("printers", [])
+        if hb_printers:
+            return {"printers": hb_printers, "active_printer": CONNECTOR_HEARTBEATS[shop_id].get("active_printer", ""), "source": "desktop_connector"}
+    
+    # 2. Check any online desktop connector heartbeat
+    for s_id, hb in CONNECTOR_HEARTBEATS.items():
+        if hb.get("printers"):
+            return {"printers": hb.get("printers", []), "active_printer": hb.get("active_printer", ""), "source": "desktop_connector"}
+            
+    # 3. Fallback to local server printers
+    local_printers = get_installed_printers()
+    return {"printers": local_printers, "active_printer": "", "source": "local_system"}
 
 class TestPrintRequest(BaseModel):
     printer_name: str = ""

@@ -280,6 +280,12 @@ def main():
                 data = json.loads(resp.read().decode("utf-8"))
                 
             jobs = data.get("jobs", [])
+            remote_printer = data.get("selected_printer")
+            if remote_printer and remote_printer != cfg.get("printer"):
+                cfg["printer"] = remote_printer
+                selected_printer = remote_printer
+                save_config(cfg)
+                print(f"\n[SYNC] Active printer updated from Web Dashboard to: '{remote_printer}'")
             for job in jobs:
                 color_mode = str(job.get("color_mode", "bw")).lower()
                 

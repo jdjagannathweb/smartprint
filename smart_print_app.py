@@ -388,7 +388,10 @@ class SmartPrintApp:
         btn_save.pack(side=tk.LEFT, padx=(0, 10))
 
         btn_test = tk.Button(btn_row, text="🖨️ Test Print", font=("Segoe UI", 9), bg="#f1f5f9", fg="#334155", padx=12, pady=3, relief="flat", cursor="hand2", command=self.run_test_print)
-        btn_test.pack(side=tk.LEFT)
+        btn_test.pack(side=tk.LEFT, padx=(0, 10))
+
+        btn_refresh_printers = tk.Button(btn_row, text="🔄 Refresh Printers", font=("Segoe UI", 9), bg="#f8fafc", fg="#1e293b", padx=12, pady=3, relief="groove", cursor="hand2", command=self.refresh_printers_list)
+        btn_refresh_printers.pack(side=tk.LEFT)
 
         # 3. System Options Card
         card_sys = tk.LabelFrame(self.tab_settings, text="💻 Windows Startup Automation", font=("Segoe UI", 10, "bold"), bg="#ffffff", fg="#1e3a8a", padx=14, pady=10)
@@ -544,6 +547,15 @@ class SmartPrintApp:
             self.add_job_to_feed("TEST", "Test Print Page", 1, "BW", "1-Side", "❌ Error")
             messagebox.showerror("Error", f"Failed to print test page to '{target_printer}'. Please check printer connection/power.")
 
+    def refresh_printers_list(self):
+        printers, default_p = get_installed_printers()
+        self.printers = printers
+        self.default_printer = default_p
+        self.cb_single["values"] = self.printers
+        self.cb_bw["values"] = self.printers
+        self.cb_color["values"] = self.printers
+        messagebox.showinfo("Printers Refreshed", f"Found {len(self.printers)} installed printers on this PC:\n\n" + "\n".join(f"• {p}" for p in self.printers))
+
     def open_web_dashboard(self):
         url = self.cfg.get("server_url", "https://smartprint-xvt8.onrender.com") + "/dashboard"
         import webbrowser
@@ -581,6 +593,30 @@ class SmartPrintApp:
                             self.root.after(0, lambda: self.set_status(True, "CONNECTED TO CLOUD"))
 
                     jobs = data.get("jobs", [])
+
+                    # Live Sync: Check if shop changed selected printer from Web Dashboard
+                    remote_printer = data.get("selected_printer")
+                    if remote_printer and remote_printer != self.cfg.get("printer"):
+                        self.cfg["printer"] = remote_printer
+                        save_config(self.cfg)
+                        if remote_printer in self.printers:
+                            self.root.after(0, lambda p=remote_printer: self.cb_single.set(p))
+                        self.root.after(0, self.update_routing_label)
+
+                    remote_bw = data.get("bw_printer")
+                    if remote_bw and remote_bw != self.cfg.get("bw_printer"):
+                        self.cfg["bw_printer"] = remote_bw
+                        save_config(self.cfg)
+                        if remote_bw in self.printers:
+                            self.root.after(0, lambda p=remote_bw: self.cb_bw.set(p))
+
+                    remote_col = data.get("color_printer")
+                    if remote_col and remote_col != self.cfg.get("color_printer"):
+                        self.cfg["color_printer"] = remote_col
+                        save_config(self.cfg)
+                        if remote_col in self.printers:
+                            self.root.after(0, lambda p=remote_col: self.cb_color.set(p))
+
                     for job in jobs:
                         self.process_job(job, server, token)
 

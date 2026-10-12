@@ -139,6 +139,16 @@ def init_db():
     except Exception:
         pass
     try:
+        c.execute("ALTER TABLE shops ADD COLUMN bw_printer TEXT DEFAULT ''")
+        conn.commit()
+    except Exception:
+        pass
+    try:
+        c.execute("ALTER TABLE shops ADD COLUMN color_printer TEXT DEFAULT ''")
+        conn.commit()
+    except Exception:
+        pass
+    try:
         c.execute("ALTER TABLE jobs ADD COLUMN smbupi_payment_url TEXT DEFAULT ''")
         conn.commit()
     except Exception:
@@ -211,6 +221,47 @@ def init_db():
     
     for k, v in defaults.items():
         c.execute("INSERT OR IGNORE INTO saas_settings (key, value) VALUES (?, ?)", (k, v))
+
+    # Pre-seed default SMB UPI keys for main shop if empty
+    try:
+        c.execute("""
+            UPDATE shops 
+            SET smbupi_api_key = 'pi_live_3231b071ec7e88a64711eb7ab2285a05bc302ca4dddd0a9e',
+                smbupi_api_secret = 'sk_live_d1f2e2769b3ec22b8d3ea81a52888fbca7d685fa7e860acb',
+                smbupi_enabled = 1
+            WHERE (slug = 'smart-print' OR shop_id = 'SHP-818D63')
+              AND (smbupi_api_key IS NULL OR smbupi_api_key = '')
+        """)
+        conn.commit()
+    except Exception:
+        pass
+
+    # Restore from config/shop_settings_persistent.json if available
+    config_file = Path(__file__).parent / "config" / "shop_settings_persistent.json"
+    if config_file.exists():
+        try:
+            with open(config_file, "r", encoding="utf-8") as f:
+                saved_configs = json.load(f)
+            for s_key, s_data in saved_configs.items():
+                fields = []
+                vals = []
+                allowed_p = ["shop_name", "owner_name", "upi_id", "upi_name", "shop_qr_image",
+                             "rate_bw", "rate_color", "rate_double_bw", "rate_double_color",
+                             "selected_printer", "bw_printer", "color_printer", "auto_print_enabled",
+                             "paytm_mid", "paytm_merchant_key", "paytm_vpa", "paytm_enabled",
+                             "phonepe_client_id", "phonepe_client_secret", "phonepe_client_version", "phonepe_env", "phonepe_enabled",
+                             "smbupi_api_key", "smbupi_api_secret", "smbupi_webhook_secret", "smbupi_enabled"]
+                for col in allowed_p:
+                    if col in s_data:
+                        fields.append(f"{col} = ?")
+                        vals.append(s_data[col])
+                if fields:
+                    vals.append(s_key)
+                    vals.append(s_key)
+                    c.execute(f"UPDATE shops SET {', '.join(fields)} WHERE shop_id = ? OR slug = ?", vals)
+            conn.commit()
+        except Exception:
+            pass
         
     conn.commit()
     conn.close()
@@ -317,7 +368,7 @@ def update_shop_settings(shop_id, updates):
     values = []
     allowed = ["shop_name", "owner_name", "upi_id", "upi_name", "shop_qr_image",
                "rate_bw", "rate_color", "rate_double_bw", "rate_double_color",
-               "selected_printer", "auto_print_enabled", "password", "is_active",
+               "selected_printer", "bw_printer", "color_printer", "auto_print_enabled", "password", "is_active",
                "paytm_mid", "paytm_merchant_key", "paytm_vpa", "paytm_enabled",
                "phonepe_client_id", "phonepe_client_secret", "phonepe_client_version", "phonepe_env", "phonepe_enabled",
                "smbupi_api_key", "smbupi_api_secret", "smbupi_webhook_secret", "smbupi_enabled"]
@@ -330,6 +381,26 @@ def update_shop_settings(shop_id, updates):
         c.execute(f"UPDATE shops SET {', '.join(fields)} WHERE shop_id = ?", values)
         conn.commit()
     conn.close()
+    
+    # Auto-backup to persistent json file
+    try:
+        updated_shop = get_shop_by_id(shop_id)
+        if updated_shop:
+            config_dir = Path(__file__).parent / "config"
+            config_dir.mkdir(parents=True, exist_ok=True)
+            cfg_path = config_dir / "shop_settings_persistent.json"
+            all_cfgs = {}
+            if cfg_path.exists():
+                with open(cfg_path, "r", encoding="utf-8") as f:
+                    all_cfgs = json.load(f)
+            all_cfgs[shop_id] = dict(updated_shop)
+            if updated_shop.get("slug"):
+                all_cfgs[updated_shop["slug"]] = dict(updated_shop)
+            with open(cfg_path, "w", encoding="utf-8") as f:
+                json.dump(all_cfgs, f, indent=2, ensure_ascii=False)
+    except Exception:
+        pass
+
     return get_shop_by_id(shop_id)
 
 def is_subscription_valid(shop):

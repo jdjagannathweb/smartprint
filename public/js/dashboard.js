@@ -37,7 +37,15 @@ async function checkDesktopAppStatus() {
       badge.style.background = "#dcfce7";
       badge.style.color = "#15803d";
       if (infoBox) infoBox.style.display = "block";
-      if (printerName) printerName.textContent = data.active_printer || "Default Windows Printer";
+      const activePrint = data.active_printer || currentShop?.selected_printer || "Default Windows Printer";
+      if (printerName) printerName.textContent = activePrint;
+      const pill = document.getElementById("currentActivePrinterPill");
+      if (pill) {
+        pill.textContent = currentShop?.selected_printer || activePrint;
+      }
+      if (data.printers && data.printers.length > 0 && availablePrinters.length === 0) {
+        populatePrinterSelects(data.printers);
+      }
     } else {
       badge.textContent = "⚪ ଅଫଲାଇନ୍ (Offline)";
       badge.style.background = "#f1f5f9";
@@ -45,6 +53,49 @@ async function checkDesktopAppStatus() {
       if (infoBox) infoBox.style.display = "none";
     }
   } catch (e) {}
+}
+
+function populatePrinterSelects(printers) {
+  availablePrinters = printers || [];
+  const select = document.getElementById("printerSelect");
+  const bwSelect = document.getElementById("bwPrinterSelect");
+  const colSelect = document.getElementById("colorPrinterSelect");
+  
+  if (select) {
+    const curVal = select.value || currentShop?.selected_printer || "";
+    select.innerHTML = '<option value="">(ସିଷ୍ଟମ୍ ଡିଫଲ୍ଟ ପ୍ରିଣ୍ଟର୍ - System Default)</option>';
+    availablePrinters.forEach(p => {
+      const opt = document.createElement("option");
+      opt.value = p;
+      opt.textContent = p;
+      if (curVal === p) opt.selected = true;
+      select.appendChild(opt);
+    });
+  }
+
+  if (bwSelect) {
+    const curBw = bwSelect.value || currentShop?.bw_printer || "";
+    bwSelect.innerHTML = '<option value="">(ମୁଖ୍ୟ ପ୍ରିଣ୍ଟର୍ ବ୍ୟବହାର କରନ୍ତୁ)</option>';
+    availablePrinters.forEach(p => {
+      const opt = document.createElement("option");
+      opt.value = p;
+      opt.textContent = p;
+      if (curBw === p) opt.selected = true;
+      bwSelect.appendChild(opt);
+    });
+  }
+
+  if (colSelect) {
+    const curCol = colSelect.value || currentShop?.color_printer || "";
+    colSelect.innerHTML = '<option value="">(ମୁଖ୍ୟ ପ୍ରିଣ୍ଟର୍ ବ୍ୟବହାର କରନ୍ତୁ)</option>';
+    availablePrinters.forEach(p => {
+      const opt = document.createElement("option");
+      opt.value = p;
+      opt.textContent = p;
+      if (curCol === p) opt.selected = true;
+      colSelect.appendChild(opt);
+    });
+  }
 }
 
 function playNotificationChime() {
@@ -77,6 +128,10 @@ function switchTab(tabId) {
 
   const btn = Array.from(document.querySelectorAll(".nav-tab")).find(b => b.getAttribute("onclick")?.includes(tabId));
   if (btn) btn.classList.add("active");
+
+  if (tabId === "printer") {
+    loadPrinters();
+  }
 }
 
 function handleLogout() {
@@ -220,30 +275,62 @@ async function loadShopDetails() {
       document.getElementById("modalUpiIdText").textContent = shop.saas_plans.superadmin_upi_id;
     }
 
+    // Set Active Printer Pill and Dual Printer Options
+    const activePill = document.getElementById("currentActivePrinterPill");
+    if (activePill) {
+      activePill.textContent = shop.selected_printer || "ସିଷ୍ଟମ୍ ଡିଫଲ୍ଟ ପ୍ରିଣ୍ଟର୍ (System Default)";
+    }
+    const hasDual = Boolean(shop.bw_printer || shop.color_printer);
+    const chkDual = document.getElementById("chkEnableDualPrinter");
+    const boxDual = document.getElementById("dualPrinterBox");
+    const arrDual = document.getElementById("dualPrinterArrow");
+    if (chkDual) chkDual.checked = hasDual;
+    if (boxDual) boxDual.style.display = hasDual ? "block" : "none";
+    if (arrDual) arrDual.textContent = hasDual ? "▲" : "▼";
+
+    await loadPrinters();
+
   } catch (err) {
     console.error("Error loading shop details:", err);
   }
 }
 
-async function loadPrinters() {
-  const select = document.getElementById("printerSelect");
-  if (!select) return;
+function toggleDualPrinterOptions(e) {
+  const chk = document.getElementById("chkEnableDualPrinter");
+  const box = document.getElementById("dualPrinterBox");
+  const arrow = document.getElementById("dualPrinterArrow");
+  if (!chk || !box) return;
+  if (e && e.target === chk) {
+    // Checkbox directly clicked
+  } else if (!e) {
+    chk.checked = !chk.checked;
+  }
+  box.style.display = chk.checked ? "block" : "none";
+  if (arrow) arrow.textContent = chk.checked ? "▲" : "▼";
+}
+
+async function loadPrinters(forceAlert = false) {
   try {
-    const res = await fetch("/api/printers");
+    const shopId = currentShopId || "";
+    const res = await fetch(`/api/printers?shop_id=${shopId}`);
     if (res.ok) {
       const data = await res.json();
-      availablePrinters = data.printers || [];
-      select.innerHTML = '<option value="">(ସିଷ୍ଟମ୍ ଡିଫଲ୍ଟ ପ୍ରିଣ୍ଟର୍)</option>';
+      const printers = data.printers || [];
+      populatePrinterSelects(printers);
 
-      availablePrinters.forEach(p => {
-        const opt = document.createElement("option");
-        opt.value = p;
-        opt.textContent = p;
-        if (currentShop && currentShop.selected_printer === p) {
-          opt.selected = true;
+      const activePrint = currentShop?.selected_printer || data.active_printer || "";
+      const pill = document.getElementById("currentActivePrinterPill");
+      if (pill) {
+        pill.textContent = activePrint || "ସିଷ୍ଟମ୍ ଡିଫଲ୍ଟ ପ୍ରିଣ୍ଟର୍ (System Default)";
+      }
+
+      if (forceAlert) {
+        if (printers.length > 0) {
+          alert(`✅ ${printers.length} ଟି ପ୍ରିଣ୍ଟର୍ ତାଲିକା ମିଳିଲା!\n\n` + printers.map((p, i) => `${i + 1}. ${p}`).join("\n"));
+        } else {
+          alert("ℹ️ ଏପର୍ଯ୍ୟନ୍ତ କୌଣସି ପ୍ରିଣ୍ଟର୍ ତାଲିକା ମିଳିଲା ନାହିଁ।\nଦୟାକରି ନିଶ୍ଚିତ କରନ୍ତୁ ଯେ ଆପଣଙ୍କ PC ରେ Smart Print Windows App ଚାଲୁ ଅଛି।");
         }
-        select.appendChild(opt);
-      });
+      }
     }
   } catch (err) {
     console.error("Error loading printers:", err);
@@ -251,28 +338,67 @@ async function loadPrinters() {
 }
 
 async function savePrinterChoice() {
-  const printer = document.getElementById("printerSelect").value;
+  const select = document.getElementById("printerSelect");
+  const printer = select ? select.value : "";
+  const chkDual = document.getElementById("chkEnableDualPrinter");
+  const isDual = chkDual ? chkDual.checked : false;
+  const bwPrinter = isDual ? (document.getElementById("bwPrinterSelect")?.value || "") : "";
+  const colorPrinter = isDual ? (document.getElementById("colorPrinterSelect")?.value || "") : "";
+
+  const btn = document.getElementById("btnSavePrinterChoice");
+  const statusSpan = document.getElementById("printerSaveStatus");
+  if (btn) btn.disabled = true;
+
   try {
+    const payload = {
+      shop_name: currentShop.shop_name,
+      owner_name: currentShop.owner_name,
+      upi_id: currentShop.upi_id,
+      rate_bw: currentShop.rate_bw,
+      rate_double_bw: currentShop.rate_double_bw !== undefined ? currentShop.rate_double_bw : 3.0,
+      rate_color: currentShop.rate_color,
+      rate_double_color: currentShop.rate_double_color !== undefined ? currentShop.rate_double_color : 15.0,
+      selected_printer: printer,
+      bw_printer: bwPrinter,
+      color_printer: colorPrinter
+    };
+
     const res = await fetch(`/api/shop/${currentShopId}/settings`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        shop_name: currentShop.shop_name,
-        owner_name: currentShop.owner_name,
-        upi_id: currentShop.upi_id,
-        rate_bw: currentShop.rate_bw,
-        rate_double_bw: currentShop.rate_double_bw !== undefined ? currentShop.rate_double_bw : 3.0,
-        rate_color: currentShop.rate_color,
-        rate_double_color: currentShop.rate_double_color !== undefined ? currentShop.rate_double_color : 15.0,
-        selected_printer: printer
-      })
+      body: JSON.stringify(payload)
     });
+
     if (res.ok) {
-      alert("✅ ପ୍ରିଣ୍ଟର୍ ସଫଳତାର ସହ ସେଭ୍ ହେଲା!");
+      currentShop.selected_printer = printer;
+      currentShop.bw_printer = bwPrinter;
+      currentShop.color_printer = colorPrinter;
+
+      const pill = document.getElementById("currentActivePrinterPill");
+      if (pill) {
+        pill.textContent = printer || "ସିଷ୍ଟମ୍ ଡିଫଲ୍ଟ ପ୍ରିଣ୍ଟର୍ (System Default)";
+      }
+      const desktopLiveName = document.getElementById("desktopLivePrinterName");
+      if (desktopLiveName) {
+        desktopLiveName.textContent = printer || "Default Windows Printer";
+      }
+      if (statusSpan) {
+        statusSpan.style.display = "inline";
+        setTimeout(() => { statusSpan.style.display = "none"; }, 5000);
+      }
+      let msg = `✅ ପ୍ରିଣ୍ଟର୍ ସଫଳତାର ସହ ସେଭ୍ ହେଲା!\n• ସକ୍ରିୟ ପ୍ରିଣ୍ଟର୍: ${printer || "ସିଷ୍ଟମ୍ ଡିଫଲ୍ଟ (System Default)"}`;
+      if (isDual) {
+        msg += `\n• B&W ପ୍ରିଣ୍ଟର୍: ${bwPrinter || printer || "System Default"}\n• Color ପ୍ରିଣ୍ଟର୍: ${colorPrinter || printer || "System Default"}`;
+      }
+      alert(msg);
       await loadShopDetails();
+    } else {
+      alert("ଭୁଲ୍: ପ୍ରିଣ୍ଟର୍ ସେଭ୍ ହୋଇପାରିଲା ନାହିଁ।");
     }
   } catch (err) {
     alert("ଭୁଲ୍: ପ୍ରିଣ୍ଟର୍ ସେଭ୍ ହୋଇପାରିଲା ନାହିଁ।");
+  } finally {
+    if (btn) btn.disabled = false;
   }
 }
 
@@ -718,12 +844,17 @@ function copySmbWebhookUrl() {
 }
 
 async function saveSmbUpiSettings() {
-  const enabled = document.getElementById("smbupiEnabledToggle")?.checked ? 1 : 0;
   const apiKey = document.getElementById("smbupiApiKeyInput")?.value.trim() || "";
   const apiSecret = document.getElementById("smbupiApiSecretInput")?.value.trim() || "";
   const webhookSecret = document.getElementById("smbupiWebhookSecretInput")?.value.trim() || "";
+  let enabled = document.getElementById("smbupiEnabledToggle")?.checked ? 1 : 0;
 
-  if (enabled && (!apiKey || !apiSecret)) {
+  if (apiKey && apiSecret) {
+    // If keys are provided, ensure enabled is 1
+    enabled = 1;
+    const toggleEl = document.getElementById("smbupiEnabledToggle");
+    if (toggleEl) toggleEl.checked = true;
+  } else if (enabled) {
     alert("⚠️ ଦୟାକରି SMB UPI API Key (pi_live_...) ଏବଂ API Secret (sk_live_...) ଦୁଇଟିଯାକ ପୂରଣ କରନ୍ତୁ!");
     return;
   }
@@ -749,7 +880,7 @@ async function saveSmbUpiSettings() {
       })
     });
     if (res.ok) {
-      alert("✅ SMB UPI (smbupi.com) ସେଟିଙ୍ଗ୍ ସଫଳତାର ସହ ସେଭ୍ ହେଲା!");
+      alert("✅ SMB UPI (smbupi.com) ସେଟିଙ୍ଗ୍ ସଫଳତାର ସହ ସେଭ୍ ହେଲା ଏବଂ ସବୁଦିନ ପାଇଁ ସୁରକ୍ଷିତ ରହିଲା!");
       await loadShopDetails();
     } else {
       const err = await res.json();
@@ -758,6 +889,182 @@ async function saveSmbUpiSettings() {
   } catch (err) {
     alert("Error saving SMB UPI settings: " + err.message);
   }
+}
+
+// Counter QR & Poster Download Functions
+function downloadCounterQr() {
+  const qrImg = document.getElementById("standeeQrImg");
+  if (!qrImg || !qrImg.src) {
+    alert("⚠️ QR କୋଡ୍ ଏପର୍ଯ୍ୟନ୍ତ ଲୋଡ୍ ହୋଇନାହିଁ। ଦୟାକରି ପୃଷ୍ଠା ରିଫ୍ରେସ୍ କରନ୍ତୁ।");
+    return;
+  }
+  const link = document.createElement("a");
+  link.href = qrImg.src;
+  link.download = `SmartPrint-QR-${currentShop?.slug || 'shop'}.png`;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+}
+
+function downloadPosterImage() {
+  const qrImg = document.getElementById("standeeQrImg");
+  if (!qrImg || !qrImg.src) {
+    alert("⚠️ QR କୋଡ୍ ଏପର୍ଯ୍ୟନ୍ତ ଲୋଡ୍ ହୋଇନାହିଁ।");
+    return;
+  }
+
+  const canvas = document.createElement("canvas");
+  const ctx = canvas.getContext("2d");
+  const width = 800;
+  const height = 1100;
+  canvas.width = width;
+  canvas.height = height;
+
+  // Background
+  ctx.fillStyle = "#ffffff";
+  ctx.fillRect(0, 0, width, height);
+
+  // Border (Double styling)
+  ctx.strokeStyle = "#0284c7";
+  ctx.lineWidth = 12;
+  ctx.strokeRect(20, 20, width - 40, height - 40);
+
+  ctx.strokeStyle = "#e0f2fe";
+  ctx.lineWidth = 4;
+  ctx.strokeRect(34, 34, width - 68, height - 68);
+
+  // Top Header Banner
+  ctx.fillStyle = "#0284c7";
+  ctx.fillRect(40, 40, width - 80, 160);
+
+  // Brand Name
+  ctx.fillStyle = "#ffffff";
+  ctx.font = "bold 44px 'Inter', sans-serif";
+  ctx.textAlign = "center";
+  const shopTitle = currentShop?.shop_name || "ସ୍ମାର୍ଟ ପ୍ରିଣ୍ଟ୍ & ଜେରକ୍ସ";
+  ctx.fillText(shopTitle, width / 2, 110);
+
+  ctx.font = "600 24px 'Inter', sans-serif";
+  ctx.fillStyle = "#e0f2fe";
+  ctx.fillText("Self-Service Instant Mobile Printing", width / 2, 160);
+
+  // Instruction
+  ctx.fillStyle = "#0f172a";
+  ctx.font = "bold 34px 'Inter', sans-serif";
+  ctx.fillText("📲 ସ୍କାନ୍ କରନ୍ତୁ & ନିଜ ମୋବାଇଲ୍ ରୁ ପ୍ରିଣ୍ଟ୍ କରନ୍ତୁ", width / 2, 270);
+
+  ctx.fillStyle = "#64748b";
+  ctx.font = "500 22px 'Inter', sans-serif";
+  ctx.fillText("Scan QR with Camera or Google Lens to Upload Document", width / 2, 310);
+
+  // Draw QR Image
+  const img = new Image();
+  img.crossOrigin = "anonymous";
+  img.onload = () => {
+    // QR Card Background
+    const qrSize = 460;
+    const qrX = (width - qrSize) / 2;
+    const qrY = 350;
+
+    ctx.fillStyle = "#f8fafc";
+    ctx.strokeStyle = "#cbd5e1";
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.roundRect(qrX - 16, qrY - 16, qrSize + 32, qrSize + 32, 16);
+    ctx.fill();
+    ctx.stroke();
+
+    ctx.drawImage(img, qrX, qrY, qrSize, qrSize);
+
+    // URL below QR
+    ctx.fillStyle = "#0369a1";
+    ctx.font = "bold 24px 'Inter', monospace";
+    ctx.textAlign = "center";
+    const urlText = currentShop?.customer_url || window.location.origin;
+    ctx.fillText(urlText, width / 2, 880);
+
+    // Feature Badge
+    ctx.fillStyle = "#059669";
+    ctx.font = "bold 26px 'Inter', sans-serif";
+    ctx.fillText("⚡ 0% Fee Instant UPI Auto-Print Enabled", width / 2, 930);
+
+    ctx.fillStyle = "#64748b";
+    ctx.font = "500 20px 'Inter', sans-serif";
+    ctx.fillText("PhonePe • Google Pay • Paytm • BHIM UPI Supported", width / 2, 970);
+
+    // Footer
+    ctx.fillStyle = "#94a3b8";
+    ctx.font = "500 16px 'Inter', sans-serif";
+    ctx.fillText("Powered by SmartPrint Cloud Platform", width / 2, 1040);
+
+    // Download
+    const a = document.createElement("a");
+    a.href = canvas.toDataURL("image/png");
+    a.download = `SmartPrint-Poster-${currentShop?.slug || 'shop'}.png`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+  };
+  img.src = qrImg.src;
+}
+
+function printCounterPoster() {
+  const printArea = document.getElementById("standeePrintArea");
+  if (!printArea) {
+    window.print();
+    return;
+  }
+
+  const printWindow = window.open("", "_blank", "width=800,height=900");
+  printWindow.document.write(`
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <title>Counter Poster - ${currentShop?.shop_name || "SmartPrint"}</title>
+      <style>
+        body {
+          font-family: 'Inter', -apple-system, sans-serif;
+          margin: 0;
+          padding: 40px;
+          display: flex;
+          justify-content: center;
+          align-items: center;
+          background: #fff;
+        }
+        .poster-card {
+          border: 3px solid #0284c7;
+          border-radius: 20px;
+          padding: 40px 30px;
+          text-align: center;
+          max-width: 500px;
+          width: 100%;
+          box-sizing: border-box;
+        }
+        h2 { font-size: 28px; color: #0284c7; margin: 0 0 8px; }
+        p { font-size: 16px; color: #475569; margin: 0 0 24px; }
+        img { width: 280px; height: 280px; border-radius: 12px; border: 1.5px solid #cbd5e1; padding: 6px; margin-bottom: 16px; }
+        .url-box { font-weight: bold; font-size: 18px; color: #0f172a; word-break: break-all; margin-bottom: 12px; }
+        .badge { font-size: 14px; color: #059669; font-weight: bold; }
+        @media print {
+          body { padding: 0; }
+          .poster-card { border-width: 4px; box-shadow: none; margin: 20px auto; }
+        }
+      </style>
+    </head>
+    <body>
+      <div class="poster-card">
+        ${printArea.innerHTML}
+      </div>
+      <script>
+        window.onload = function() {
+          window.print();
+          window.onafterprint = function() { window.close(); };
+        };
+      </script>
+    </body>
+    </html>
+  `);
+  printWindow.document.close();
 }
 
 // Renewal Modal Helpers
