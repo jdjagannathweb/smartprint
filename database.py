@@ -205,6 +205,28 @@ def init_db():
     )
     """)
     
+    # Safe migration for renewal_requests
+    try:
+        c.execute("ALTER TABLE renewal_requests ADD COLUMN order_id TEXT DEFAULT ''")
+        conn.commit()
+    except Exception:
+        pass
+    try:
+        c.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_renewal_order_id ON renewal_requests(order_id) WHERE order_id != ''")
+        conn.commit()
+    except Exception:
+        pass
+    try:
+        c.execute("ALTER TABLE renewal_requests ADD COLUMN payment_url TEXT DEFAULT ''")
+        conn.commit()
+    except Exception:
+        pass
+    try:
+        c.execute("ALTER TABLE renewal_requests ADD COLUMN gateway TEXT DEFAULT 'smbupi'")
+        conn.commit()
+    except Exception:
+        pass
+
     # Default SaaS Settings if not exists
     defaults = {
         "master_pin": "1234",
@@ -216,21 +238,24 @@ def init_db():
         "plan2_price": "899",
         "superadmin_upi_id": "9937037131@ybl",
         "superadmin_upi_name": "Smart Print Super Admin",
-        "free_trial_days": "180"
+        "free_trial_days": "180",
+        "superadmin_smbupi_api_key": "",
+        "superadmin_smbupi_api_secret": "",
+        "superadmin_smbupi_webhook_secret": "",
+        "superadmin_smbupi_enabled": "0"
     }
     
     for k, v in defaults.items():
         c.execute("INSERT OR IGNORE INTO saas_settings (key, value) VALUES (?, ?)", (k, v))
 
-    # Pre-seed default SMB UPI keys for main shop if empty
+    # Clean any legacy pre-seeded default demo keys from database
     try:
         c.execute("""
             UPDATE shops 
-            SET smbupi_api_key = 'pi_live_3231b071ec7e88a64711eb7ab2285a05bc302ca4dddd0a9e',
-                smbupi_api_secret = 'sk_live_d1f2e2769b3ec22b8d3ea81a52888fbca7d685fa7e860acb',
-                smbupi_enabled = 1
-            WHERE (slug = 'smart-print' OR shop_id = 'SHP-818D63')
-              AND (smbupi_api_key IS NULL OR smbupi_api_key = '')
+            SET smbupi_api_key = '',
+                smbupi_api_secret = '',
+                smbupi_enabled = 0
+            WHERE smbupi_api_key = 'pi_live_3231b071ec7e88a64711eb7ab2285a05bc302ca4dddd0a9e'
         """)
         conn.commit()
     except Exception:
@@ -704,5 +729,83 @@ def superadmin_delete_shop(shop_id):
     conn.close()
     return True
 
+# ---------- SUBSCRIPTION & RENEWAL FUNCTIONS ----------
+
+def create_subscription_order(shop_id, plan_code, plan_name, amount, duration_days, order_id, payment_url="", gateway="smbupi"):
+    conn = get_connection()
+    c = conn.cursor()
+    now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    c.execute("""
+    INSERT INTO renewal_requests (
+        shop_id, plan_code, plan_name, amount, duration_days, order_id, payment_url, gateway, status, created_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?)
+    """, (shop_id, plan_code, plan_name, amount, duration_days, order_id, payment_url, gateway, now_str))
+    conn.commit()
+    conn.close()
+    return get_subscription_order(order_id)
+
+def get_subscription_order(order_id):
+    conn = get_connection()
+    c = conn.cursor()
+    c.execute("SELECT * FROM renewal_requests WHERE order_id = ?", (order_id,))
+    row = c.fetchone()
+    conn.close()
+    return dict(row) if row else None
+
+def complete_subscription_order(order_id, payment_ref=""):
+    conn = get_connection()
+    c = conn.cursor()
+    c.execute("SELECT * FROM renewal_requests WHERE order_id = ?", (order_id,))
+    row = c.fetchone()
+    if not row:
+        conn.close()
+        return {"success": False, "error": "Order not found"}
+        
+    order = dict(row)
+    if order["status"] == "paid":
+        conn.close()
+        return {"success": True, "already_paid": True, "shop_id": order["shop_id"]}
+        
+    c.execute("""
+    UPDATE renewal_requests 
+    SET status = 'paid', payment_ref = ? 
+    WHERE order_id = ?
+    """, (payment_ref or order.get("payment_ref", ""), order_id))
+    conn.commit()
+    conn.close()
+    
+    # Automatically extend shop validity
+    new_expiry = extend_shop_subscription(order["shop_id"], int(order["duration_days"]))
+    return {"success": True, "new_expiry": new_expiry, "shop_id": order["shop_id"], "duration_days": order["duration_days"]}
+
+def submit_manual_renewal_request(shop_id, plan_code, plan_name, amount, duration_days, utr):
+    conn = get_connection()
+    c = conn.cursor()
+    now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    order_id = f"MAN-{shop_id[-4:]}-{int(datetime.now().timestamp())}"
+    c.execute("""
+    INSERT INTO renewal_requests (
+        shop_id, plan_code, plan_name, amount, duration_days, order_id, payment_url, gateway, payment_ref, status, created_at
+    ) VALUES (?, ?, ?, ?, ?, ?, '', 'manual_upi', ?, 'pending', ?)
+    """, (shop_id, plan_code, plan_name, amount, duration_days, order_id, utr, now_str))
+    conn.commit()
+    conn.close()
+    return get_subscription_order(order_id)
+
+def get_all_renewal_requests(limit=100):
+    conn = get_connection()
+    c = conn.cursor()
+    c.execute("""
+    SELECT r.*, s.shop_name, s.owner_name, s.mobile, s.slug
+    FROM renewal_requests r
+    LEFT JOIN shops s ON r.shop_id = s.shop_id
+    ORDER BY r.id DESC
+    LIMIT ?
+    """, (limit,))
+    rows = [dict(row) for row in c.fetchall()]
+    conn.close()
+    return rows
+
 # Initialize DB on import
 init_db()
+

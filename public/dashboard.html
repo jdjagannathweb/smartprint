@@ -760,14 +760,14 @@
 
   <!-- RENEWAL MODAL -->
   <div class="modal-overlay" id="renewalModal">
-    <div class="modal-card">
+    <div class="modal-card" style="max-width: 500px;">
       <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
         <h3 style="margin: 0; color: #0f172a;">💳 ସବସ୍କ୍ରିପସନ୍ ରିନ୍ୟୁଆଲ୍</h3>
         <button onclick="closeRenewalModal()" style="background: none; border: none; font-size: 1.4rem; cursor: pointer;">✕</button>
       </div>
 
-      <p style="font-size: 0.9rem; color: #475569; margin-bottom: 16px;">
-        ଆପଣଙ୍କ ପ୍ଲାନ୍ ବୃଦ୍ଧି କରିବା ପାଇଁ ନିମ୍ନଲିଖିତ QR କୋଡ୍ ସ୍କାନ୍ କରି ପ୍ଲାଟଫର୍ମ ମାଲିକଙ୍କୁ ପେମେଣ୍ଟ୍ କରନ୍ତୁ:
+      <p style="font-size: 0.88rem; color: #475569; margin-bottom: 16px;">
+        ଆପଣଙ୍କ Smart Print Cloud Platform ସବସ୍କ୍ରିପସନ୍ ବୃଦ୍ଧି କରିବା ପାଇଁ ପ୍ଲାନ୍ ବାଛନ୍ତୁ:
       </p>
 
       <!-- PLAN SELECTION IN MODAL -->
@@ -780,20 +780,42 @@
         </button>
       </div>
 
-      <div style="text-align: center; background: #f8fafc; padding: 20px; border-radius: 14px; margin-bottom: 16px; border: 1px solid #e2e8f0;">
-        <div style="font-size: 1.1rem; font-weight: 800; color: #0f172a; margin-bottom: 8px;" id="modalAmountDisplay">ଦେୟ ରାଶି: ₹899</div>
-        <img id="superadminQrImg" src="" alt="Admin UPI QR" style="width: 180px; height: 180px; border-radius: 8px; margin-bottom: 8px;">
-        <div style="font-size: 0.85rem; color: #334155; font-weight: 700;">UPI ID: <span id="modalUpiIdText">9937037131@ybl</span></div>
+      <!-- ONLINE PAYMENT SECTION (SUPER ADMIN API) -->
+      <div id="renewalOnlineSection" style="background: linear-gradient(135deg, #ecfdf5 0%, #d1fae5 100%); border: 2px solid #10b981; border-radius: 14px; padding: 18px; margin-bottom: 16px; text-align: center;">
+        <div style="font-weight: 800; color: #065f46; font-size: 1.05rem; margin-bottom: 4px;">
+          ⚡ ଅନଲାଇନ୍ ପେମେଣ୍ଟ୍ & ତୁରନ୍ତ ସକ୍ରିୟ (Instant Auto-Activation)
+        </div>
+        <div style="font-size: 0.82rem; color: #047857; margin-bottom: 14px;">
+          PhonePe, Google Pay, Paytm ମାଧ୍ୟମରେ ପେମେଣ୍ଟ୍ କରନ୍ତୁ। ପେମେଣ୍ଟ୍ ସରିବା ମାତ୍ରେ ଆପଣଙ୍କ ପ୍ଲାନ୍ ଆପେ ଆପେ ସକ୍ରିୟ ହୋଇଯିବ!
+        </div>
+        <button id="btnPayOnlineRenewal" onclick="payOnlineRenewal()" class="btn btn-primary" style="width: 100%; padding: 14px; font-weight: 800; font-size: 1.05rem; background: linear-gradient(135deg, #059669 0%, #047857 100%); border-color: #047857; box-shadow: 0 4px 14px rgba(5, 150, 105, 0.3); cursor: pointer;">
+          💳 ଅନଲାଇନ୍ ପେ କରନ୍ତୁ (Pay & Auto-Renew)
+        </button>
+        <div id="renewalPollingNotice" style="display: none; margin-top: 12px; font-size: 0.85rem; color: #047857; font-weight: 700; background: #fff; padding: 10px; border-radius: 8px; border: 1px dashed #10b981;">
+          ⏳ ପେମେଣ୍ଟ୍ ଯାଞ୍ଚ ହେଉଛି... ଦୟାକରି ଆପଣଙ୍କ UPI App ରେ ପେମେଣ୍ଟ୍ କରନ୍ତୁ। ପେମେଣ୍ଟ୍ ସରିଲେ ଏଠାରେ ସ୍ୱୟଂଚାଳିତ ଭାବରେ ସକ୍ରିୟ ହେବ!
+        </div>
       </div>
 
-      <div class="form-group">
-        <label style="font-size: 0.85rem; font-weight: 700;">ପେମେଣ୍ଟ୍ Transaction ID / UTR ନମ୍ବର ଦିଅନ୍ତୁ</label>
-        <input type="text" id="renewalTxnInput" class="form-control" placeholder="ଉଦାହରଣ: 428192837192">
-      </div>
+      <!-- MANUAL UPI FALLBACK SECTION -->
+      <div id="renewalManualSection">
+        <div style="font-size: 0.8rem; font-weight: 700; color: #64748b; margin-bottom: 10px; text-align: center;">
+          — କିମ୍ବା ମାନୁଆଲ୍ QR କୋଡ୍ ସ୍କାନ୍ କରି ପେମେଣ୍ଟ୍ କରନ୍ତୁ —
+        </div>
+        <div style="text-align: center; background: #f8fafc; padding: 16px; border-radius: 14px; margin-bottom: 14px; border: 1px solid #e2e8f0;">
+          <div style="font-size: 1rem; font-weight: 800; color: #0f172a; margin-bottom: 6px;" id="modalAmountDisplay">ଦେୟ ରାଶି: ₹899</div>
+          <img id="superadminQrImg" src="" alt="Admin UPI QR" style="width: 160px; height: 160px; border-radius: 8px; margin-bottom: 6px;">
+          <div style="font-size: 0.82rem; color: #334155; font-weight: 700;">UPI ID: <span id="modalUpiIdText">9937037131@ybl</span></div>
+        </div>
 
-      <button class="btn btn-success" style="width: 100%; padding: 12px; font-weight: 700;" onclick="submitRenewalRequest()">
-        ✅ ମୁଁ ପେମେଣ୍ଟ୍ କରିସାରିଛି (ସବମିଟ୍ କରନ୍ତୁ)
-      </button>
+        <div class="form-group" style="margin-bottom: 12px;">
+          <label style="font-size: 0.82rem; font-weight: 700;">ପେମେଣ୍ଟ୍ Transaction ID / UTR ନମ୍ବର ଦିଅନ୍ତୁ</label>
+          <input type="text" id="renewalTxnInput" class="form-control" placeholder="ଉଦାହରଣ: 428192837192">
+        </div>
+
+        <button class="btn btn-secondary" style="width: 100%; padding: 11px; font-weight: 700;" onclick="submitRenewalRequest()">
+          📝 ମାନୁଆଲ୍ UTR ସବମିଟ୍ କରନ୍ତୁ
+        </button>
+      </div>
     </div>
   </div>
 

@@ -314,16 +314,22 @@ async function proceedToPayment() {
     const data = await res.json();
     if (!res.ok) throw new Error(data.detail || "Error configuring job");
 
-    currentJob = data.job || data;
+    // Robust merge: ensure all URLs, flags, and QR codes from data and data.job are preserved!
+    currentJob = Object.assign({}, data.job || {}, data);
 
     // Show Step 3
     const totalAmt = parseFloat(currentJob.total_amount || 0).toFixed(2);
     document.getElementById("payAmountDisplay").textContent = `₹${totalAmt}`;
     
-    // QR image
-    const qrSrc = currentJob.qr_code || currentJob.qr_code_base64 || "";
-    if (qrSrc) {
-      document.getElementById("payQrImage").src = qrSrc;
+    // QR image with foolproof fallback
+    let qrSrc = currentJob.qr_code || currentJob.qr_code_base64 || data.qr_code || data.qr_code_base64 || "";
+    if (!qrSrc && currentJob.upi_uri) {
+      qrSrc = `https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${encodeURIComponent(currentJob.upi_uri)}`;
+    }
+    const qrImg = document.getElementById("payQrImage");
+    if (qrImg && qrSrc) {
+      qrImg.src = qrSrc;
+      qrImg.style.display = "inline-block";
     }
     
     // Shop custom standee QR if uploaded
@@ -382,9 +388,6 @@ async function proceedToPayment() {
     if (smbupiBox) {
       smbupiBox.style.display = isSmbUpi ? "block" : "none";
     }
-    if (smbupiBtn && currentJob.smbupi_pay_url) {
-      smbupiBtn.href = currentJob.smbupi_pay_url;
-    }
     if (isSmbUpi) {
       startSmbUpiAutoVerification(currentJob.id);
     } else if (smbupiPollInterval) {
@@ -403,14 +406,8 @@ async function proceedToPayment() {
     }
 
     const upiLinkBtn = document.getElementById("directUpiPayLink");
-    if (targetPayUrl) {
-      if (upiLinkBtn) {
-        upiLinkBtn.href = targetPayUrl;
-        upiLinkBtn.style.display = "inline-flex";
-      }
-      setupQuickUpiChips(currentJob.upi_uri);
-    } else {
-      if (upiLinkBtn) upiLinkBtn.style.display = "none";
+    if (upiLinkBtn) {
+      upiLinkBtn.style.display = (targetPayUrl || currentJob.upi_uri) ? "inline-flex" : "none";
     }
 
     setStep(3);
@@ -422,7 +419,7 @@ async function proceedToPayment() {
         redirectNotice.style.display = "block";
       }
       setTimeout(() => {
-        window.location.href = targetPayUrl;
+        triggerPayApp('auto');
       }, 500);
     }
 
@@ -431,16 +428,47 @@ async function proceedToPayment() {
   }
 }
 
-function setupQuickUpiChips(upiUri) {
-  if (!upiUri) return;
-  const rawQuery = upiUri.includes("?") ? upiUri.split("?")[1] : upiUri.replace(/^upi:\/\/pay\?/, "");
-  const btnPhonepe = document.getElementById("quickPhonepeLink");
-  const btnGpay = document.getElementById("quickGpayLink");
-  const btnPaytm = document.getElementById("quickPaytmLink");
+function triggerPayApp(target) {
+  if (!currentJob) return;
 
-  if (btnPhonepe) btnPhonepe.href = `phonepe://pay?${rawQuery}`;
-  if (btnGpay) btnGpay.href = `gpay://upi/pay?${rawQuery}`;
-  if (btnPaytm) btnPaytm.href = `paytmmp://pay?${rawQuery}`;
+  // 1. If SMB UPI Gateway is enabled:
+  if (currentJob.is_smbupi_auto && currentJob.smbupi_pay_url) {
+    window.location.href = currentJob.smbupi_pay_url;
+    return;
+  }
+
+  // 2. If PhonePe Gateway is enabled:
+  if (currentJob.is_phonepe_auto && currentJob.phonepe_pay_url) {
+    window.location.href = currentJob.phonepe_pay_url;
+    return;
+  }
+
+  // 3. Direct UPI Intent
+  const upi = currentJob.upi_uri || "";
+  if (!upi) {
+    alert("UPI Payment ଲିଙ୍କ୍ ପ୍ରସ୍ତୁତ ହୋଇପାରିଲା ନାହିଁ। ଦୟାକରି QR କୋଡ୍ ସ୍କାନ୍ କରନ୍ତୁ କିମ୍ବା UPI ID କପି କରନ୍ତୁ।");
+    return;
+  }
+
+  const rawQuery = upi.includes("?") ? upi.split("?")[1] : upi.replace(/^upi:\/\/pay\?/, "");
+
+  if (target === "phonepe") {
+    window.location.href = `phonepe://pay?${rawQuery}`;
+    setTimeout(() => { window.location.href = upi; }, 1200);
+  } else if (target === "gpay") {
+    window.location.href = `gpay://upi/pay?${rawQuery}`;
+    setTimeout(() => { window.location.href = upi; }, 1200);
+  } else if (target === "paytm") {
+    window.location.href = `paytmmp://pay?${rawQuery}`;
+    setTimeout(() => { window.location.href = upi; }, 1200);
+  } else {
+    // Universal intent - triggers Android app selector (PhonePe, GPay, Paytm)
+    window.location.href = upi;
+  }
+}
+
+function setupQuickUpiChips(upiUri) {
+  // Handled by triggerPayApp onclick
 }
 
 async function resumeJobPaymentStatus(jobId) {
@@ -610,6 +638,8 @@ async function claimPaymentDone() {
     if (!res.ok) throw new Error("Claim failed");
 
     setStep(4);
+    document.getElementById("waitingTitle").textContent = "⏳ ଦୋକାନୀ ଯାଞ୍ଚ କରୁଛନ୍ତି...";
+    document.getElementById("waitingDesc").textContent = "ଆପଣଙ୍କ ପେମେଣ୍ଟ୍ ଦାବି ଦୋକାନୀଙ୍କ ଡ୍ୟାସବୋର୍ଡକୁ ପଠାଗଲା। ଦୋକାନୀ ନିଜ UPI ଆପ୍ ଯାଞ୍ଚ କରି Approve କଲା ପରେ କାଗଜ ପ୍ରିଣ୍ଟ୍ ବାହାରିବ।";
     startPollingPrintStatus();
   } catch (err) {
     alert("ଭୁଲ୍: " + err.message);

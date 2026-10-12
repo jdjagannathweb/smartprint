@@ -166,12 +166,92 @@ async function loadSuperAdminData() {
     document.getElementById("cfgPlan2Days").value = settings.plan2_days || "365";
     document.getElementById("cfgPlan2Price").value = settings.plan2_price || "899";
 
+    // Super Admin SMB UPI Payment Gateway
+    const smbUpiKeyEl = document.getElementById("cfgSuperAdminSmbUpiKey");
+    const smbUpiSecretEl = document.getElementById("cfgSuperAdminSmbUpiSecret");
+    const smbUpiEnabledEl = document.getElementById("cfgSuperAdminSmbUpiEnabled");
+    if (smbUpiKeyEl) smbUpiKeyEl.value = settings.superadmin_smbupi_api_key || "";
+    if (smbUpiSecretEl) smbUpiSecretEl.value = settings.superadmin_smbupi_api_secret || "";
+    if (smbUpiEnabledEl) smbUpiEnabledEl.checked = settings.superadmin_smbupi_enabled === "1" || settings.superadmin_smbupi_enabled === 1;
+
+    const webhookTextEl = document.getElementById("saWebhookUrlText");
+    if (webhookTextEl) {
+      webhookTextEl.textContent = `${window.location.origin}/api/webhooks/smbupi`;
+    }
+
     document.getElementById("cfgSuperAdminUpi").value = settings.superadmin_upi_id || "9937037131@ybl";
     document.getElementById("cfgSuperAdminUpiName").value = settings.superadmin_upi_name || "Smart Print Platform";
     document.getElementById("cfgFreeTrialDays").value = settings.free_trial_days || "180";
 
+    // Populate Renewals History Tab Table
+    const renewals = data.renewals || [];
+    const rBody = document.getElementById("renewalsTableBody");
+    if (rBody) {
+      if (renewals.length === 0) {
+        rBody.innerHTML = `<tr><td colspan="7" style="text-align: center; padding: 24px; color: #94a3b8;">କୌଣସି ସବସ୍କ୍ରିପସନ୍ ଅର୍ଡର୍ ନାହିଁ।</td></tr>`;
+      } else {
+        rBody.innerHTML = renewals.map(r => {
+          const isPaid = r.status === "paid";
+          const statusBadge = isPaid
+            ? `<span class="badge-active">✅ Paid (ସକ୍ରିୟ)</span>`
+            : `<span class="badge-expired">⏳ Pending (ବାକି)</span>`;
+          const gatewayBadge = r.gateway === "smbupi"
+            ? `<span style="background: #064e3b; color: #6ee7b7; padding: 2px 6px; border-radius: 4px; font-size: 0.75rem;">⚡ SMB UPI</span>`
+            : `<span style="background: #1e293b; color: #cbd5e1; padding: 2px 6px; border-radius: 4px; font-size: 0.75rem;">📱 Manual UPI</span>`;
+
+          const actionBtn = !isPaid
+            ? `<button class="btn btn-sm btn-success" style="font-size: 0.75rem; padding: 4px 8px;" onclick="approveRenewalOrder('${r.order_id}')">✅ Confirm & Activate</button>`
+            : `<span style="color: #64748b; font-size: 0.78rem;">ସମ୍ପନ୍ନ</span>`;
+
+          return `
+            <tr>
+              <td>
+                <div style="font-weight: 700; color: #fff;">${escapeHtml(r.order_id || "#" + r.id)}</div>
+                <div style="font-size: 0.78rem; color: #94a3b8;">${r.created_at || ""}</div>
+              </td>
+              <td>
+                <div style="font-weight: 700; color: #fff;">${escapeHtml(r.shop_name || r.shop_id)}</div>
+                <div style="font-size: 0.8rem; color: #94a3b8;">${escapeHtml(r.owner_name || "")} (${r.mobile || ""})</div>
+              </td>
+              <td>
+                <div style="font-weight: 700; color: #38bdf8;">${escapeHtml(r.plan_name)}</div>
+                <div style="font-size: 0.78rem; color: #94a3b8;">+${r.duration_days} ଦିନ</div>
+              </td>
+              <td style="font-weight: 800; color: #4ade80;">₹${r.amount}</td>
+              <td>
+                <div>${gatewayBadge}</div>
+                <div style="font-size: 0.78rem; color: #fbbf24; margin-top: 3px;">${escapeHtml(r.payment_ref || "-")}</div>
+              </td>
+              <td>${statusBadge}</td>
+              <td>${actionBtn}</td>
+            </tr>
+          `;
+        }).join("");
+      }
+    }
+
   } catch (err) {
     console.error("Super Admin load error:", err);
+  }
+}
+
+async function approveRenewalOrder(orderId) {
+  if (!confirm(`ଆପଣ ଏହି ସବସ୍କ୍ରିପସନ୍ ଅର୍ଡର୍ (${orderId}) କୁ ଅନୁମୋଦନ କରି ଦୋକାନୀଙ୍କ ପ୍ଲାନ୍ ସକ୍ରିୟ କରିବାକୁ ଚାହାନ୍ତି କି?`)) return;
+
+  try {
+    const res = await fetch("/api/superadmin/extend", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        pin: currentPin,
+        order_id: orderId
+      })
+    });
+    // Or call subscription completion
+    alert("✅ ଅର୍ଡର୍ ସଫଳତାର ସହ ସକ୍ରିୟ ହେଲା!");
+    await loadSuperAdminData();
+  } catch (err) {
+    alert("Error: " + err.message);
   }
 }
 
@@ -230,6 +310,9 @@ async function handleSaveSaasSettings(e) {
     superadmin_upi_id: document.getElementById("cfgSuperAdminUpi").value.trim(),
     superadmin_upi_name: document.getElementById("cfgSuperAdminUpiName").value.trim(),
     free_trial_days: parseInt(document.getElementById("cfgFreeTrialDays").value, 10),
+    superadmin_smbupi_api_key: document.getElementById("cfgSuperAdminSmbUpiKey") ? document.getElementById("cfgSuperAdminSmbUpiKey").value.trim() : "",
+    superadmin_smbupi_api_secret: document.getElementById("cfgSuperAdminSmbUpiSecret") ? document.getElementById("cfgSuperAdminSmbUpiSecret").value.trim() : "",
+    superadmin_smbupi_enabled: document.getElementById("cfgSuperAdminSmbUpiEnabled") && document.getElementById("cfgSuperAdminSmbUpiEnabled").checked ? 1 : 0,
     new_master_pin: document.getElementById("cfgNewMasterPin").value.trim() || null
   };
 
@@ -240,7 +323,7 @@ async function handleSaveSaasSettings(e) {
       body: JSON.stringify(payload)
     });
     if (res.ok) {
-      alert("✅ ସମସ୍ତ SaaS ୨ ଟି ପ୍ଲାନ୍ ଏବଂ UPI ସେଟିଙ୍ଗ୍ ସଫଳତାର ସହ ସେଭ୍ ହେଲା!");
+      alert("✅ ସମସ୍ତ SaaS ୨ ଟି ପ୍ଲାନ୍ ଏବଂ Super Admin Payment Gateway ସେଟିଙ୍ଗ୍ ସଫଳତାର ସହ ସେଭ୍ ହେଲା!");
       if (payload.new_master_pin) {
         currentPin = payload.new_master_pin;
         sessionStorage.setItem("superadmin_pin", currentPin);

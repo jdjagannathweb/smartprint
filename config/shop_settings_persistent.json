@@ -30,10 +30,10 @@
     "phonepe_client_version": 1,
     "phonepe_env": "PRODUCTION",
     "phonepe_enabled": 0,
-    "smbupi_api_key": "pi_live_3231b071ec7e88a64711eb7ab2285a05bc302ca4dddd0a9e",
-    "smbupi_api_secret": "sk_live_d1f2e2769b3ec22b8d3ea81a52888fbca7d685fa7e860acb",
+    "smbupi_api_key": "",
+    "smbupi_api_secret": "",
     "smbupi_webhook_secret": "",
-    "smbupi_enabled": 1,
+    "smbupi_enabled": 0,
     "bw_printer": "",
     "color_printer": ""
   },
@@ -68,10 +68,10 @@
     "phonepe_client_version": 1,
     "phonepe_env": "PRODUCTION",
     "phonepe_enabled": 0,
-    "smbupi_api_key": "pi_live_3231b071ec7e88a64711eb7ab2285a05bc302ca4dddd0a9e",
-    "smbupi_api_secret": "sk_live_d1f2e2769b3ec22b8d3ea81a52888fbca7d685fa7e860acb",
+    "smbupi_api_key": "",
+    "smbupi_api_secret": "",
     "smbupi_webhook_secret": "",
-    "smbupi_enabled": 1,
+    "smbupi_enabled": 0,
     "bw_printer": "",
     "color_printer": ""
   }

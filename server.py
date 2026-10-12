@@ -4,6 +4,7 @@ import socket
 import base64
 import json
 import uuid
+import urllib.parse
 from pathlib import Path
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, UploadFile, File, Form, HTTPException, BackgroundTasks, Request, Depends
@@ -173,11 +174,13 @@ def get_shop_details(shop_id: str):
     
     # Include SaaS 2 plans info for renewal
     saas = database.get_all_saas_settings()
+    is_admin_api = bool(int(saas.get("superadmin_smbupi_enabled", 0)) and saas.get("superadmin_smbupi_api_key") and saas.get("superadmin_smbupi_api_secret"))
     shop["saas_plans"] = {
         "plan1": {"name": saas.get("plan1_name", "6 Months"), "days": int(saas.get("plan1_days", 180)), "price": float(saas.get("plan1_price", 499))},
         "plan2": {"name": saas.get("plan2_name", "1 Year"), "days": int(saas.get("plan2_days", 365)), "price": float(saas.get("plan2_price", 899))},
         "superadmin_upi_id": saas.get("superadmin_upi_id", "9937037131@ybl"),
-        "superadmin_upi_name": saas.get("superadmin_upi_name", "Smart Print Platform")
+        "superadmin_upi_name": saas.get("superadmin_upi_name", "Smart Print Platform"),
+        "superadmin_smbupi_enabled": is_admin_api
     }
     return shop
 
@@ -452,9 +455,8 @@ def customer_configure_job(job_id: str, body: CustomerConfigureRequest):
         "smbupi_payment_url": smbupi_pay_url
     })
     
-    return {
+    job_payload = {
         **updated,
-        "job": updated,
         "upi_uri": upi_uri,
         "qr_code": qr_b64,
         "qr_code_base64": qr_b64,
@@ -465,6 +467,11 @@ def customer_configure_job(job_id: str, body: CustomerConfigureRequest):
         "phonepe_pay_url": phonepe_pay_url,
         "is_smbupi_auto": is_smbupi_auto,
         "smbupi_pay_url": smbupi_pay_url
+    }
+    
+    return {
+        **job_payload,
+        "job": job_payload
     }
 
 @app.post("/api/customer/jobs/{job_id}/check-phonepe-status")
@@ -654,7 +661,8 @@ async def paytm_webhook_handler(request: Request, background_tasks: BackgroundTa
 async def smbupi_webhook_handler(request: Request, background_tasks: BackgroundTasks):
     """
     Receives instant payment notifications from SMB UPI (smbupi.com).
-    Triggers automated print execution immediately when payment is confirmed.
+    Triggers automated print execution immediately when customer payment is confirmed,
+    or automatically extends SaaS Subscription if it is a platform subscription order.
     """
     try:
         body_bytes = await request.body()
@@ -678,6 +686,13 @@ async def smbupi_webhook_handler(request: Request, background_tasks: BackgroundT
         is_success = (status == "success" or event in ["payment.success", "order.paid", "success"])
         
         if order_id and is_success:
+            # 1. Super Admin SaaS Platform Subscription Order
+            if order_id.startswith("SUB-"):
+                res_sub = database.complete_subscription_order(order_id, payment_ref=payload.get("utr", ""))
+                print(f"[SUPERADMIN SMB UPI SUBSCRIPTION WEBHOOK] Order {order_id} verified & activated! Res: {res_sub}")
+                return {"status": "SUCCESS", "message": "Super Admin subscription activated"}
+
+            # 2. Shop Customer Print Job (Auto-print triggered on verified payment)
             job = database.get_job(order_id)
             if job and job.get("payment_status") != "paid":
                 database.update_job_status(order_id, {
@@ -685,11 +700,40 @@ async def smbupi_webhook_handler(request: Request, background_tasks: BackgroundT
                     "print_status": "printing"
                 })
                 background_tasks.add_task(trigger_print_execution, order_id)
-                print(f"[SMBUPI WEBHOOK] Successfully verified order {order_id}. Printing triggered!")
+                print(f"[SMBUPI WEBHOOK] Successfully verified customer order {order_id}. Printing triggered!")
         
         return {"status": "SUCCESS", "message": "SMB UPI webhook processed"}
     except Exception as e:
         print(f"[SMBUPI WEBHOOK ERROR] {e}")
+        return {"status": "SUCCESS", "message": str(e)}
+
+@app.post("/api/webhooks/superadmin-subscription")
+async def superadmin_subscription_webhook(request: Request):
+    """
+    Dedicated webhook endpoint for Super Admin SaaS Platform Subscription payments.
+    """
+    try:
+        body_bytes = await request.body()
+        payload = json.loads(body_bytes.decode("utf-8")) if body_bytes else {}
+        order_id = payload.get("order_id") or payload.get("orderId") or ""
+        if not order_id and "data" in payload and isinstance(payload["data"], dict):
+            order_id = payload["data"].get("order_id") or payload["data"].get("orderId") or ""
+        
+        status = (payload.get("status") or payload.get("payment_status") or "").lower()
+        if not status and "data" in payload and isinstance(payload["data"], dict):
+            status = (payload["data"].get("payment_status") or payload["data"].get("status") or "").lower()
+            
+        event = (payload.get("event") or "").lower()
+        is_success = (status == "success" or event in ["payment.success", "order.paid", "success"])
+        
+        if order_id and is_success:
+            res_sub = database.complete_subscription_order(order_id, payment_ref=payload.get("utr", ""))
+            print(f"[SUPERADMIN SUBSCRIPTION WEBHOOK] Order {order_id} verified & activated! Result: {res_sub}")
+            return {"status": "SUCCESS", "message": "Subscription order activated"}
+            
+        return {"status": "SUCCESS", "message": "Webhook received"}
+    except Exception as e:
+        print(f"[SUPERADMIN WEBHOOK ERROR] {e}")
         return {"status": "SUCCESS", "message": str(e)}
 
 @app.get("/api/customer/jobs/{job_id}/status")
@@ -705,24 +749,15 @@ def customer_claim_paid(job_id: str, background_tasks: BackgroundTasks):
     if not job:
         raise HTTPException(status_code=404, detail="Job not found")
     
-    shop = database.get_shop_by_id(job["shop_id"])
-    auto_print = bool(shop.get("auto_print_enabled", 1)) if shop else True
-    
-    if auto_print:
-        # ⚡ Instant Auto-Print Mode: directly trigger print without waiting!
-        updated = database.update_job_status(job_id, {
-            "payment_status": "paid",
-            "print_status": "printing"
-        })
-        background_tasks.add_task(trigger_print_execution, job_id)
-        return {"success": True, "job": updated, "auto_printed": True}
-    else:
-        # Manual Merchant Approval Mode: waits for shopkeeper to click approve
-        updated = database.update_job_status(job_id, {
-            "payment_status": "claimed",
-            "print_status": "waiting_merchant"
-        })
-        return {"success": True, "job": updated, "auto_printed": False}
+    # ⚠️ Security Rule: ONLY verified payment gateway APIs (SMB UPI, PhonePe, Paytm webhooks/API verification)
+    # trigger automated instant printing.
+    # Manual customer payment claims MUST NEVER auto-print!
+    # They require the shopkeeper to check their UPI app and click "Confirm & Print" on their dashboard.
+    updated = database.update_job_status(job_id, {
+        "payment_status": "claimed",
+        "print_status": "waiting_merchant"
+    })
+    return {"success": True, "job": updated, "auto_printed": False}
 
 # ==================== MERCHANT ORDER ACTIONS ====================
 
@@ -1069,11 +1104,13 @@ def superadmin_overview(pin: str):
     overview = database.get_superadmin_overview()
     shops = database.get_all_shops_for_superadmin()
     settings = database.get_all_saas_settings()
+    renewals = database.get_all_renewal_requests()
     
     return {
         "overview": overview,
         "shops": shops,
-        "settings": settings
+        "settings": settings,
+        "renewals": renewals
     }
 
 class ExtendSubscriptionRequest(BaseModel):
@@ -1172,7 +1209,10 @@ class UpdatePlansRequest(BaseModel):
     superadmin_upi_id: str
     superadmin_upi_name: str
     free_trial_days: int
-    new_master_pin: str = None
+    superadmin_smbupi_api_key: Optional[str] = ""
+    superadmin_smbupi_api_secret: Optional[str] = ""
+    superadmin_smbupi_enabled: Optional[int] = 0
+    new_master_pin: Optional[str] = None
 
 @app.post("/api/superadmin/settings")
 def superadmin_update_settings(body: UpdatePlansRequest):
@@ -1192,10 +1232,178 @@ def superadmin_update_settings(body: UpdatePlansRequest):
     database.set_saas_setting("superadmin_upi_name", body.superadmin_upi_name)
     database.set_saas_setting("free_trial_days", body.free_trial_days)
     
+    database.set_saas_setting("superadmin_smbupi_api_key", (body.superadmin_smbupi_api_key or "").strip())
+    database.set_saas_setting("superadmin_smbupi_api_secret", (body.superadmin_smbupi_api_secret or "").strip())
+    database.set_saas_setting("superadmin_smbupi_enabled", 1 if body.superadmin_smbupi_enabled else 0)
+    
     if body.new_master_pin:
         database.set_saas_setting("master_pin", body.new_master_pin)
         
     return {"success": True}
+
+# ==================== SAAS SUBSCRIPTION PURCHASE / RENEWAL ====================
+
+class CreateSubscriptionOrderRequest(BaseModel):
+    shop_id: str
+    plan_key: str  # "plan1" or "plan2"
+
+@app.post("/api/subscription/create-order")
+def subscription_create_order(body: CreateSubscriptionOrderRequest):
+    shop = database.get_shop_by_id(body.shop_id)
+    if not shop:
+        raise HTTPException(status_code=404, detail="Shop not found")
+        
+    saas = database.get_all_saas_settings()
+    plan_key = body.plan_key if body.plan_key in ["plan1", "plan2"] else "plan2"
+    
+    if plan_key == "plan1":
+        plan_name = saas.get("plan1_name", "6 Months Plan")
+        duration_days = int(saas.get("plan1_days", 180))
+        amount = float(saas.get("plan1_price", 499))
+    else:
+        plan_name = saas.get("plan2_name", "1 Year Plan")
+        duration_days = int(saas.get("plan2_days", 365))
+        amount = float(saas.get("plan2_price", 899))
+        
+    admin_api_key = saas.get("superadmin_smbupi_api_key", "").strip()
+    admin_api_secret = saas.get("superadmin_smbupi_api_secret", "").strip()
+    is_admin_api_enabled = bool(int(saas.get("superadmin_smbupi_enabled", 0)) and admin_api_key and admin_api_secret)
+    
+    order_id = f"SUB-{shop['shop_id'][-6:]}-{plan_key.upper()}-{int(time.time())}"
+    
+    if is_admin_api_enabled:
+        base_url = get_base_url()
+        callback_url = f"{base_url}/dashboard?sub_order={order_id}"
+        smb_res = create_smbupi_order(
+            api_key=admin_api_key,
+            api_secret=admin_api_secret,
+            amount=amount,
+            order_id=order_id,
+            callback_url=callback_url,
+            customer_name=shop.get("owner_name") or "SmartPrint Merchant",
+            customer_mobile=shop.get("mobile") or "9999999999",
+            description=f"SmartPrint Subscription {plan_name}"
+        )
+        if smb_res.get("success") and smb_res.get("payment_url"):
+            payment_url = smb_res["payment_url"]
+            database.create_subscription_order(
+                shop_id=shop["shop_id"],
+                plan_code=plan_key,
+                plan_name=plan_name,
+                amount=amount,
+                duration_days=duration_days,
+                order_id=order_id,
+                payment_url=payment_url,
+                gateway="smbupi"
+            )
+            return {
+                "success": True,
+                "is_api": True,
+                "gateway": "smbupi",
+                "order_id": order_id,
+                "payment_url": payment_url,
+                "amount": amount,
+                "plan_name": plan_name,
+                "duration_days": duration_days
+            }
+        else:
+            print(f"[SUPERADMIN SMBUPI ORDER FAILED]: {smb_res.get('error')}")
+            
+    # Manual Fallback if API not configured or failed
+    upi_id = saas.get("superadmin_upi_id", "9937037131@ybl")
+    upi_name = saas.get("superadmin_upi_name", "Smart Print Platform")
+    clean_upi_uri = f"upi://pay?pa={urllib.parse.quote(upi_id)}&pn={urllib.parse.quote(upi_name)}&am={amount:.2f}&cu=INR&tn=Renewal_{shop['shop_id']}_{plan_key}"
+    
+    database.create_subscription_order(
+        shop_id=shop["shop_id"],
+        plan_code=plan_key,
+        plan_name=plan_name,
+        amount=amount,
+        duration_days=duration_days,
+        order_id=order_id,
+        payment_url="",
+        gateway="manual_upi"
+    )
+    
+    return {
+        "success": True,
+        "is_api": False,
+        "order_id": order_id,
+        "amount": amount,
+        "plan_name": plan_name,
+        "duration_days": duration_days,
+        "superadmin_upi_id": upi_id,
+        "superadmin_upi_name": upi_name,
+        "upi_uri": clean_upi_uri,
+        "qr_code": f"https://api.qrserver.com/v1/create-qr-code/?size=200x200&data={urllib.parse.quote(clean_upi_uri)}"
+    }
+
+class CheckSubscriptionOrderRequest(BaseModel):
+    order_id: str
+
+@app.post("/api/subscription/check-order-status")
+def subscription_check_order_status(body: CheckSubscriptionOrderRequest):
+    order = database.get_subscription_order(body.order_id)
+    if not order:
+        raise HTTPException(status_code=404, detail="Order not found")
+        
+    if order["status"] == "paid":
+        return {"success": True, "status": "paid", "already_paid": True}
+        
+    if order.get("gateway") == "smbupi":
+        saas = database.get_all_saas_settings()
+        admin_api_key = saas.get("superadmin_smbupi_api_key", "").strip()
+        admin_api_secret = saas.get("superadmin_smbupi_api_secret", "").strip()
+        if admin_api_key and admin_api_secret:
+            res = check_smbupi_order_status(
+                api_key=admin_api_key,
+                api_secret=admin_api_secret,
+                order_id=body.order_id
+            )
+            if res.get("success") and res.get("status") == "success":
+                comp = database.complete_subscription_order(body.order_id, payment_ref=res.get("utr", ""))
+                return {
+                    "success": True,
+                    "status": "paid",
+                    "new_expiry": comp.get("new_expiry"),
+                    "shop_id": order["shop_id"],
+                    "duration_days": order["duration_days"]
+                }
+            return {"success": True, "status": res.get("status", "pending")}
+            
+    return {"success": True, "status": order["status"]}
+
+class SubmitManualUtrRequest(BaseModel):
+    shop_id: str
+    plan_key: str
+    utr: str
+
+@app.post("/api/subscription/submit-manual-utr")
+def subscription_submit_manual_utr(body: SubmitManualUtrRequest):
+    shop = database.get_shop_by_id(body.shop_id)
+    if not shop:
+        raise HTTPException(status_code=404, detail="Shop not found")
+        
+    saas = database.get_all_saas_settings()
+    plan_key = body.plan_key if body.plan_key in ["plan1", "plan2"] else "plan2"
+    if plan_key == "plan1":
+        plan_name = saas.get("plan1_name", "6 Months Plan")
+        duration_days = int(saas.get("plan1_days", 180))
+        amount = float(saas.get("plan1_price", 499))
+    else:
+        plan_name = saas.get("plan2_name", "1 Year Plan")
+        duration_days = int(saas.get("plan2_days", 365))
+        amount = float(saas.get("plan2_price", 899))
+        
+    order = database.submit_manual_renewal_request(
+        shop_id=body.shop_id,
+        plan_code=plan_key,
+        plan_name=plan_name,
+        amount=amount,
+        duration_days=duration_days,
+        utr=body.utr.strip()
+    )
+    return {"success": True, "order": order}
 
 # ==================== HTML PAGE ROUTES ====================
 

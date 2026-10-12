@@ -1068,12 +1068,19 @@ function printCounterPoster() {
 }
 
 // Renewal Modal Helpers
+let activeRenewalOrderId = null;
+let renewalStatusPollInterval = null;
+
 function openRenewalModal() {
   document.getElementById("renewalModal").style.display = "flex";
   setModalPlan(selectedModalPlan);
 }
 
 function closeRenewalModal() {
+  if (renewalStatusPollInterval) {
+    clearInterval(renewalStatusPollInterval);
+    renewalStatusPollInterval = null;
+  }
   document.getElementById("renewalModal").style.display = "none";
 }
 
@@ -1106,10 +1113,80 @@ function setModalPlan(planKey) {
 
   document.getElementById("modalAmountDisplay").textContent = `ଦେୟ ରାଶି: ₹${price} (${planName})`;
 
+  const btnOnline = document.getElementById("btnPayOnlineRenewal");
+  if (btnOnline) {
+    btnOnline.textContent = `💳 ₹${price} ଅନଲାଇନ୍ ପେ କରନ୍ତୁ (${planName} Auto-Renew)`;
+  }
+
   // Generate Admin UPI QR using generic URI generator
   const upiUri = `upi://pay?pa=${encodeURIComponent(adminUpi)}&pn=SmartPrintAdmin&am=${price}&cu=INR&tn=Renewal_${currentShopId}_${planKey}`;
   const qrApiUrl = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(upiUri)}`;
   document.getElementById("superadminQrImg").src = qrApiUrl;
+}
+
+async function payOnlineRenewal() {
+  const btn = document.getElementById("btnPayOnlineRenewal");
+  const notice = document.getElementById("renewalPollingNotice");
+  btn.disabled = true;
+  btn.textContent = "⏳ ଅର୍ଡର୍ ତିଆରି ହେଉଛି...";
+
+  try {
+    const res = await fetch("/api/subscription/create-order", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        shop_id: currentShopId,
+        plan_key: selectedModalPlan
+      })
+    });
+    const data = await res.json();
+    if (!res.ok || !data.success) {
+      throw new Error(data.detail || "ଅର୍ଡର୍ ତିଆରି ବିଫଳ ହେଲା!");
+    }
+
+    activeRenewalOrderId = data.order_id;
+
+    if (data.is_api && data.payment_url) {
+      window.open(data.payment_url, "_blank");
+      notice.style.display = "block";
+      startRenewalStatusPolling(data.order_id);
+    } else if (data.upi_uri) {
+      window.location.href = data.upi_uri;
+      notice.style.display = "block";
+      startRenewalStatusPolling(data.order_id);
+    }
+  } catch (err) {
+    alert("ଭୁଲ୍: " + err.message);
+  } finally {
+    btn.disabled = false;
+    setModalPlan(selectedModalPlan);
+  }
+}
+
+function startRenewalStatusPolling(orderId) {
+  if (renewalStatusPollInterval) clearInterval(renewalStatusPollInterval);
+
+  renewalStatusPollInterval = setInterval(async () => {
+    try {
+      const res = await fetch("/api/subscription/check-order-status", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ order_id: orderId })
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (data.status === "paid") {
+          clearInterval(renewalStatusPollInterval);
+          renewalStatusPollInterval = null;
+          alert(`🎉 ଅଭିନନ୍ଦନ! ଆପଣଙ୍କ ସବସ୍କ୍ରିପସନ୍ ସଫଳତାର ସହ ସକ୍ରିୟ ହୋଇଗଲା!\n\nନୂଆ Expiry ତାରିଖ: ${data.new_expiry || "Updated"}`);
+          closeRenewalModal();
+          await fetchShopData();
+        }
+      }
+    } catch (e) {
+      console.log("Renewal status poll error:", e);
+    }
+  }, 3500);
 }
 
 async function submitRenewalRequest() {
@@ -1119,8 +1196,26 @@ async function submitRenewalRequest() {
     return;
   }
 
-  alert("✅ ଆପଣଙ୍କ ପେମେଣ୍ଟ୍ ସୂଚନା ସୁପର୍ ଆଡମିନ୍ ଙ୍କ ପାଖକୁ ପଠାଗଲା। ଯାଞ୍ଚ କରିବା ପରେ ଆପଣଙ୍କ ପ୍ଲାନ୍ ସକ୍ରିୟ ହୋଇଯିବ। ଧନ୍ୟବାଦ!");
-  closeRenewalModal();
+  try {
+    const res = await fetch("/api/subscription/submit-manual-utr", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        shop_id: currentShopId,
+        plan_key: selectedModalPlan,
+        utr: txnId
+      })
+    });
+    const data = await res.json();
+    if (res.ok && data.success) {
+      alert("✅ ଆପଣଙ୍କ ପେମେଣ୍ଟ୍ ସୂଚନା ସୁପର୍ ଆଡମିନ୍ ଙ୍କ ପାଖକୁ ପଠାଗଲା। ଯାଞ୍ଚ କରିବା ପରେ ଆପଣଙ୍କ ପ୍ଲାନ୍ ସକ୍ରିୟ ହୋଇଯିବ। ଧନ୍ୟବାଦ!");
+      closeRenewalModal();
+    } else {
+      throw new Error(data.detail || "ସବମିଟ୍ ବିଫଳ ହେଲା");
+    }
+  } catch (err) {
+    alert("ଭୁଲ୍: " + err.message);
+  }
 }
 
 function escapeHtml(text) {
