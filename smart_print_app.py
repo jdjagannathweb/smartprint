@@ -133,11 +133,13 @@ lnk.Save'''
     except Exception as e:
         print(f"Auto-start error: {e}")
 
-def print_pdf_silent(file_path, printer_name, copies=1, color_mode="bw", print_side="single"):
-    if not SUMATRA_PATH.exists():
-        ps_cmd = f'Start-Process -FilePath "{file_path}" -Verb PrintTo -ArgumentList "{printer_name}" -WindowStyle Hidden'
-        proc = subprocess.run(["powershell", "-NoProfile", "-Command", ps_cmd])
-        return proc.returncode == 0
+def print_pdf_silent(file_path, printer_name, copies=1, color_mode="bw", print_side="single", valid_printers=None, default_printer=None):
+    # Auto-resolve printer if invalid or not installed on this machine
+    if valid_printers:
+        if not printer_name or printer_name not in valid_printers:
+            fallback = default_printer if (default_printer and default_printer in valid_printers) else (valid_printers[0] if valid_printers else "")
+            print(f"[AUTO-FIX] Printer '{printer_name}' not available. Routing to '{fallback}'")
+            printer_name = fallback
 
     settings = []
     if copies > 1:
@@ -151,18 +153,45 @@ def print_pdf_silent(file_path, printer_name, copies=1, color_mode="bw", print_s
     else:
         settings.append("simplex")
 
-    cmd = [str(SUMATRA_PATH)]
-    if printer_name:
-        cmd.extend(["-print-to", printer_name])
-    else:
-        cmd.append("-print-to-default")
+    # 1. Try SumatraPDF Silent Spooler
+    if SUMATRA_PATH.exists():
+        cmd = [str(SUMATRA_PATH)]
+        if printer_name:
+            cmd.extend(["-print-to", printer_name])
+        else:
+            cmd.append("-print-to-default")
 
-    if settings:
-        cmd.extend(["-print-settings", ",".join(settings)])
-    cmd.extend(["-silent", str(file_path)])
+        if settings:
+            cmd.extend(["-print-settings", ",".join(settings)])
+        cmd.extend(["-silent", str(file_path)])
 
-    proc = subprocess.run(cmd)
-    return proc.returncode == 0
+        try:
+            proc = subprocess.run(cmd, timeout=30)
+            if proc.returncode == 0:
+                return True
+            print(f"[WARN] SumatraPDF exited with code {proc.returncode}. Trying PowerShell PrintTo fallback...")
+        except Exception as e:
+            print(f"[WARN] SumatraPDF execution failed: {e}")
+
+    # 2. Primary Fallback: Windows PowerShell PrintTo
+    try:
+        if printer_name:
+            ps_cmd = f'Start-Process -FilePath "{file_path}" -Verb PrintTo -ArgumentList "{printer_name}" -WindowStyle Hidden'
+        else:
+            ps_cmd = f'Start-Process -FilePath "{file_path}" -Verb Print -WindowStyle Hidden'
+        proc = subprocess.run(["powershell", "-NoProfile", "-Command", ps_cmd], timeout=30)
+        if proc.returncode == 0:
+            return True
+    except Exception as e:
+        print(f"[WARN] PowerShell PrintTo failed: {e}")
+
+    # 3. Final Fallback: Default Windows Shell Print
+    try:
+        ps_cmd_def = f'Start-Process -FilePath "{file_path}" -Verb Print -WindowStyle Hidden'
+        proc = subprocess.run(["powershell", "-NoProfile", "-Command", ps_cmd_def], timeout=30)
+        return proc.returncode == 0
+    except Exception:
+        return False
 
 def generate_test_pdf(pdf_path: Path, printer_name: str, shop_name: str = "Smart Print"):
     """Generates an A4 diagnostic test print PDF with zero lag."""
@@ -597,24 +626,26 @@ class SmartPrintApp:
                     # Live Sync: Check if shop changed selected printer from Web Dashboard
                     remote_printer = data.get("selected_printer")
                     if remote_printer and remote_printer != self.cfg.get("printer"):
-                        self.cfg["printer"] = remote_printer
-                        save_config(self.cfg)
                         if remote_printer in self.printers:
+                            self.cfg["printer"] = remote_printer
+                            save_config(self.cfg)
                             self.root.after(0, lambda p=remote_printer: self.cb_single.set(p))
-                        self.root.after(0, self.update_routing_label)
+                            self.root.after(0, self.update_routing_label)
+                        else:
+                            print(f"[WARN] Remote printer '{remote_printer}' not found on this machine! Retaining active '{self.cfg.get('printer')}'")
 
                     remote_bw = data.get("bw_printer")
                     if remote_bw and remote_bw != self.cfg.get("bw_printer"):
-                        self.cfg["bw_printer"] = remote_bw
-                        save_config(self.cfg)
                         if remote_bw in self.printers:
+                            self.cfg["bw_printer"] = remote_bw
+                            save_config(self.cfg)
                             self.root.after(0, lambda p=remote_bw: self.cb_bw.set(p))
 
                     remote_col = data.get("color_printer")
                     if remote_col and remote_col != self.cfg.get("color_printer"):
-                        self.cfg["color_printer"] = remote_col
-                        save_config(self.cfg)
                         if remote_col in self.printers:
+                            self.cfg["color_printer"] = remote_col
+                            save_config(self.cfg)
                             self.root.after(0, lambda p=remote_col: self.cb_color.set(p))
 
                     for job in jobs:
@@ -637,6 +668,12 @@ class SmartPrintApp:
         else:
             target_printer = self.cfg.get("printer") or self.default_printer or ""
 
+        # Validate target_printer against system printers
+        if self.printers and (not target_printer or target_printer not in self.printers):
+            target_printer = self.default_printer if (self.default_printer and self.default_printer in self.printers) else self.printers[0]
+            self.cfg["printer"] = target_printer
+            save_config(self.cfg)
+
         # Update feed: Downloading
         self.root.after(0, lambda: self.add_job_to_feed(job_id, original_name, job["num_pages_to_print"], color_mode.upper(), print_side.upper(), "Printing..."))
 
@@ -651,7 +688,9 @@ class SmartPrintApp:
             printer_name=target_printer,
             copies=copies,
             color_mode=color_mode,
-            print_side=print_side
+            print_side=print_side,
+            valid_printers=self.printers,
+            default_printer=self.default_printer
         )
 
         # Notify Cloud

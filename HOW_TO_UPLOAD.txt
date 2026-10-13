@@ -1,48 +1,85 @@
 ========================================================
-SMART PRINT - GITHUB UPLOAD INSTRUCTIONS
+SMART PRINT CLOUD & DESKTOP - GITHUB UPLOAD INSTRUCTIONS
 ========================================================
 
-Aapke SmartPrint website (Render) ke liye ye sabhi errors fix kar diye gaye hain:
-1. Test Print Error fix (missing 2 arguments: printer_name and shop_name)
-2. 2-Sided (Double Sided / Duplex) Print Rate Setting Dukandar Dashboard me add ho gaya
-3. Windows App ke liye Shop ID aur Token ka card Dashboard me add ho gaya
+✅ SAARE UPDATES AUR BUG FIXES COMPLETE HO GAYE HAIN:
+--------------------------------------------------------
+1. Dual Payment Gateway (SMB UPI + Binance Pay USDT):
+   - Customer Checkout (public/customer.html): Dono options active (UPI & Binance Pay).
+   - Super Admin & Merchant Subscription Modal (public/dashboard.html): Sirf UPI (INR) chalu hai, Binance Pay disable kiya gaya hai.
+   - Live Credentials & HMAC-SHA256 Webhook Verification backend me fully integrated.
+
+2. Auto-Print Failure (Bifal) Root Cause Fix:
+   - System real printer 'EPSON L3210 Series' set ho gaya hai (pehle galat default 'EPSON L3150' saved tha).
+   - Backend me auto-repair add kar diya gaya hai — jab bhi desktop connector heartbeat bhejta hai, server par printer name automatically real printer se sync ho jata hai.
+   - SumatraPDF silent printing me robust fallback add kar diya gaya hai (PowerShell PrintTo + Default Windows Spooler), taaki print kabhi fail na ho.
+
+3. Desktop Agent & Connector (smart_print_app.py / dist/SmartPrintConnect.exe):
+   - Naya compiled SmartPrintConnect.exe tayyar hai.
+   - Connector heartbeat aur real-time cloud sync working.
 
 --------------------------------------------------------
 KAISE GITHUB PAR UPLOAD KAREIN (STEP-BY-STEP):
 --------------------------------------------------------
-1. Apne browser me GitHub kholein aur SmartPrint wala repository kholein.
-2. Root folder me 'Add file' -> 'Upload files' par click karein.
-3. SMARTPRINT_GITHUB_UPLOAD folder se ye files drag and drop karein:
+Method A: ZIP File Se (Sabse Asaan Tarika)
+-----------------------------------------
+- Aapke Downloads folder me 'smartprint_fixed_files.zip' tayyar hai.
+- Ya fir 'SMARTPRINT_GITHUB_UPLOAD' folder ko direct use kar sakte hain.
+
+Method B: GitHub Website Par Upload (Drag & Drop)
+------------------------------------------------
+1. Apne browser me GitHub repository kholein (e.g. SmartPrint repo).
+2. Root Folder me 'Add file' -> 'Upload files' click karein aur SMARTPRINT_GITHUB_UPLOAD se ye files drag karein:
    - server.py
    - database.py
    - requirements.txt
    - render.yaml
    - print_connector.py
    - smart_print_app.py
-4. Niche 'Commit changes' par click karein.
+   - connector_config.json
+   - README.md
+   -> Click 'Commit changes'.
 
-5. Ab GitHub me 'services' folder kholein (agar pehle se hai toh usme jayein, warna upload karein):
-   - 'Add file' -> 'Upload files'
-   - SMARTPRINT_GITHUB_UPLOAD/services folder se:
-     - printer_service.py
-     - document_service.py
-     - payment_service.py
-     - settings_service.py
-     - tunnel_service.py
-   - Niche 'Commit changes' par click karein.
+3. 'services' folder kholein (ya create karein):
+   - Upload karein:
+     * printer_service.py
+     * document_service.py
+     * payment_service.py
+     * settings_service.py
+     * tunnel_service.py
+   -> Click 'Commit changes'.
 
-6. Ab GitHub me 'public' folder kholein:
-   - 'Add file' -> 'Upload files'
-   - SMARTPRINT_GITHUB_UPLOAD/public se HTML files upload karein:
-     - dashboard.html
-     - customer.html
-     - login.html
-     - register.html
-     - superadmin.html
-   - Aur public/js folder me jaakar JS files upload karein:
-     - dashboard.js
-     - customer.js
-     - superadmin.js
-   - 'Commit changes' par click karein.
+4. 'public' folder kholein:
+   - Upload karein:
+     * dashboard.html
+     * customer.html
+     * login.html
+     * register.html
+     * superadmin.html
+     * admin.html
+     * index.html
+   -> Click 'Commit changes'.
 
-Render automatically 1 minute ke andar nayi files ke saath website update kar dega!
+5. 'public/js' folder kholein:
+   - Upload karein:
+     * dashboard.js
+     * customer.js
+     * superadmin.js
+     * admin.js
+     * app.js
+   -> Click 'Commit changes'.
+
+6. 'public/css' folder kholein:
+   - Upload karein:
+     * style.css
+     * admin.css
+   -> Click 'Commit changes'.
+
+7. 'config' folder kholein:
+   - Upload karein:
+     * shop_settings_persistent.json
+     * settings.json
+   -> Click 'Commit changes'.
+
+Render 1-2 minute me automatically build complete karke live website update kar dega!
+========================================================

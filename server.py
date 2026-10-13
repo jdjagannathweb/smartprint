@@ -213,6 +213,8 @@ class ShopSettingsUpdate(BaseModel):
     rate_double_bw: Optional[float] = 3.0
     rate_double_color: Optional[float] = 15.0
     selected_printer: str = ""
+    bw_printer: Optional[str] = ""
+    color_printer: Optional[str] = ""
     auto_print_enabled: Optional[int] = 1
     paytm_mid: Optional[str] = None
     paytm_merchant_key: Optional[str] = None
@@ -243,6 +245,8 @@ def update_shop_config(shop_id: str, body: ShopSettingsUpdate):
         "rate_double_bw": body.rate_double_bw if body.rate_double_bw is not None else shop.get("rate_double_bw", 3.0),
         "rate_double_color": body.rate_double_color if body.rate_double_color is not None else shop.get("rate_double_color", 15.0),
         "selected_printer": body.selected_printer if body.selected_printer is not None else shop.get("selected_printer", ""),
+        "bw_printer": body.bw_printer if body.bw_printer is not None else shop.get("bw_printer", ""),
+        "color_printer": body.color_printer if body.color_printer is not None else shop.get("color_printer", ""),
         "auto_print_enabled": body.auto_print_enabled if body.auto_print_enabled is not None else shop.get("auto_print_enabled", 1),
         "paytm_mid": (body.paytm_mid if body.paytm_mid is not None else shop.get("paytm_mid", "")).strip(),
         "paytm_merchant_key": (body.paytm_merchant_key if body.paytm_merchant_key is not None else shop.get("paytm_merchant_key", "")).strip(),
@@ -981,6 +985,15 @@ def connector_heartbeat(body: ConnectorHeartbeatRequest):
         "active_printer": body.active_printer,
         "printers": body.printers
     }
+    
+    # Auto-repair shop selected_printer if empty or if current selection is invalid/absent from active connector printers
+    current_sel = shop.get("selected_printer", "").strip()
+    if body.active_printer:
+        if not current_sel or (body.printers and current_sel not in body.printers):
+            database.update_shop_settings(body.shop_id, {"selected_printer": body.active_printer})
+    elif body.printers and not current_sel:
+        database.update_shop_settings(body.shop_id, {"selected_printer": body.printers[0]})
+
     return {"success": True}
 
 @app.get("/api/shop/{shop_id}/connector-status")

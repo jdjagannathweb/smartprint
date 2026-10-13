@@ -75,14 +75,15 @@ def get_installed_printers():
     except Exception:
         return [], None
 
-def print_pdf_silent(file_path, printer_name, copies=1, color_mode="bw", print_side="single"):
+def print_pdf_silent(file_path, printer_name, copies=1, color_mode="bw", print_side="single", valid_printers=None, default_printer=None):
+    # Auto-resolve printer if invalid or not installed on this machine
+    if valid_printers:
+        if not printer_name or printer_name not in valid_printers:
+            fallback = default_printer if (default_printer and default_printer in valid_printers) else (valid_printers[0] if valid_printers else "")
+            print(f"    [AUTO-FIX] Printer '{printer_name}' not available. Routing to '{fallback}'")
+            printer_name = fallback
+
     sumatra = Path(os.environ.get("LOCALAPPDATA", "")) / "SumatraPDF" / "SumatraPDF.exe"
-    if not sumatra.exists():
-        # Fallback to powershell PrintTo
-        ps_cmd = f'Start-Process -FilePath "{file_path}" -Verb PrintTo -ArgumentList "{printer_name}" -WindowStyle Hidden'
-        proc = subprocess.run(["powershell", "-NoProfile", "-Command", ps_cmd])
-        return proc.returncode == 0
-    
     settings = []
     if copies > 1:
         settings.append(f"{copies}x")
@@ -96,18 +97,45 @@ def print_pdf_silent(file_path, printer_name, copies=1, color_mode="bw", print_s
     else:
         settings.append("simplex")
         
-    cmd = [str(sumatra)]
-    if printer_name:
-        cmd.extend(["-print-to", printer_name])
-    else:
-        cmd.append("-print-to-default")
+    # 1. Try SumatraPDF Silent Spooler
+    if sumatra.exists():
+        cmd = [str(sumatra)]
+        if printer_name:
+            cmd.extend(["-print-to", printer_name])
+        else:
+            cmd.append("-print-to-default")
+            
+        if settings:
+            cmd.extend(["-print-settings", ",".join(settings)])
+        cmd.extend(["-silent", str(file_path)])
         
-    if settings:
-        cmd.extend(["-print-settings", ",".join(settings)])
-    cmd.extend(["-silent", str(file_path)])
-    
-    proc = subprocess.run(cmd)
-    return proc.returncode == 0
+        try:
+            proc = subprocess.run(cmd, timeout=30)
+            if proc.returncode == 0:
+                return True
+            print(f"    [WARN] SumatraPDF returned code {proc.returncode}. Trying PowerShell PrintTo fallback...")
+        except Exception as e:
+            print(f"    [WARN] SumatraPDF execution failed: {e}")
+
+    # 2. Primary Fallback: PowerShell PrintTo
+    try:
+        if printer_name:
+            ps_cmd = f'Start-Process -FilePath "{file_path}" -Verb PrintTo -ArgumentList "{printer_name}" -WindowStyle Hidden'
+        else:
+            ps_cmd = f'Start-Process -FilePath "{file_path}" -Verb Print -WindowStyle Hidden'
+        proc = subprocess.run(["powershell", "-NoProfile", "-Command", ps_cmd], timeout=30)
+        if proc.returncode == 0:
+            return True
+    except Exception as e:
+        print(f"    [WARN] PowerShell PrintTo failed: {e}")
+
+    # 3. Final Fallback: Windows Default Shell Print
+    try:
+        ps_cmd_def = f'Start-Process -FilePath "{file_path}" -Verb Print -WindowStyle Hidden'
+        proc = subprocess.run(["powershell", "-NoProfile", "-Command", ps_cmd_def], timeout=30)
+        return proc.returncode == 0
+    except Exception:
+        return False
 
 def load_config():
     if CONFIG_FILE.exists():
@@ -274,6 +302,21 @@ def main():
     
     while True:
         try:
+            # Send periodic heartbeat to cloud
+            try:
+                hb_url = f"{server_url}/api/connector/heartbeat"
+                hb_data = json.dumps({
+                    "shop_id": shop_id,
+                    "token": token,
+                    "status": "online",
+                    "active_printer": selected_printer,
+                    "printers": printers
+                }).encode("utf-8")
+                hb_req = urllib.request.Request(hb_url, data=hb_data, headers={"Content-Type": "application/json"})
+                urllib.request.urlopen(hb_req, timeout=5)
+            except Exception:
+                pass
+
             url = f"{server_url}/api/connector/jobs?shop_id={shop_id}&token={token}"
             req = urllib.request.Request(url)
             with urllib.request.urlopen(req, timeout=10) as resp:
@@ -282,10 +325,14 @@ def main():
             jobs = data.get("jobs", [])
             remote_printer = data.get("selected_printer")
             if remote_printer and remote_printer != cfg.get("printer"):
-                cfg["printer"] = remote_printer
-                selected_printer = remote_printer
-                save_config(cfg)
-                print(f"\n[SYNC] Active printer updated from Web Dashboard to: '{remote_printer}'")
+                if remote_printer in printers:
+                    cfg["printer"] = remote_printer
+                    selected_printer = remote_printer
+                    save_config(cfg)
+                    print(f"\n[SYNC] Active printer updated from Web Dashboard to: '{remote_printer}'")
+                else:
+                    print(f"\n[WARN] Web Dashboard printer '{remote_printer}' is not installed on this PC! Keeping '{selected_printer}'")
+
             for job in jobs:
                 color_mode = str(job.get("color_mode", "bw")).lower()
                 
@@ -298,6 +345,13 @@ def main():
                 else:
                     target_printer = cfg.get("printer") or selected_printer
                 
+                # Validate target_printer
+                if printers and (not target_printer or target_printer not in printers):
+                    target_printer = system_default if (system_default and system_default in printers) else printers[0]
+                    cfg["printer"] = target_printer
+                    selected_printer = target_printer
+                    save_config(cfg)
+
                 print_side = str(job.get("print_side", "single")).lower()
                 
                 print(f"\n>>> [NEW JOB RECEIVED] #{job['id']} - {job['original_name']}")
@@ -314,7 +368,9 @@ def main():
                     printer_name=target_printer,
                     copies=job.get("copies", 1),
                     color_mode=color_mode,
-                    print_side=print_side
+                    print_side=print_side,
+                    valid_printers=printers,
+                    default_printer=system_default
                 )
                 
                 confirm_url = f"{server_url}/api/connector/jobs/{job['id']}/printed"
