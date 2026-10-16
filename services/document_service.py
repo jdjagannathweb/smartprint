@@ -40,53 +40,83 @@ def update_job(job_id: str, updates: dict):
             return j
     return None
 
-def process_uploaded_file(original_name: str, file_bytes: bytes) -> dict:
+def process_uploaded_files(files_data: list[tuple[str, bytes]]) -> dict:
     """
-    Saves uploaded file and converts to PDF if it is an image.
-    Returns {job_id, original_name, pdf_path, page_count}
+    Accepts a list of (original_name, file_bytes).
+    Converts images to PDF, merges all PDFs/images into a single combined PDF,
+    and returns the consolidated job_data dictionary.
     """
+    if not files_data:
+        raise ValueError("No files provided")
+        
     job_id = "PJ-" + uuid.uuid4().hex[:8].upper()
-    ext = Path(original_name).suffix.lower()
-    
     target_pdf = UPLOADS_DIR / f"{job_id}.pdf"
     
-    if ext in [".jpg", ".jpeg", ".png", ".webp", ".bmp"]:
-        # Convert image to PDF
-        temp_img_path = UPLOADS_DIR / f"{job_id}_temp{ext}"
-        with open(temp_img_path, "wb") as f:
-            f.write(file_bytes)
-        
-        with Image.open(temp_img_path) as img:
-            rgb_img = img.convert("RGB")
-            rgb_img.save(target_pdf, "PDF", resolution=100.0)
-        
-        try:
-            temp_img_path.unlink(missing_ok=True)
-        except Exception:
-            pass
-        page_count = 1
-    elif ext == ".pdf":
-        with open(target_pdf, "wb") as f:
-            f.write(file_bytes)
-        reader = PdfReader(str(target_pdf))
-        page_count = len(reader.pages)
-    else:
-        raise ValueError(f"Unsupported file format: {ext}. Please upload a PDF or Image.")
+    writer = PdfWriter()
+    files_info = []
+    total_pages = 0
     
+    import io
+    for filename, file_bytes in files_data:
+        if not file_bytes:
+            continue
+        ext = Path(filename).suffix.lower()
+        if ext in [".jpg", ".jpeg", ".png", ".webp", ".bmp"]:
+            try:
+                with Image.open(io.BytesIO(file_bytes)) as img:
+                    rgb_img = img.convert("RGB")
+                    img_pdf_io = io.BytesIO()
+                    rgb_img.save(img_pdf_io, "PDF", resolution=100.0)
+                    img_pdf_io.seek(0)
+                    reader = PdfReader(img_pdf_io)
+                    p_count = len(reader.pages)
+                    for p in reader.pages:
+                        writer.add_page(p)
+                    total_pages += p_count
+                    files_info.append({"name": filename, "pages": p_count, "type": "image"})
+            except Exception as e:
+                raise ValueError(f"Could not process image '{filename}': {e}")
+        elif ext == ".pdf":
+            try:
+                reader = PdfReader(io.BytesIO(file_bytes))
+                p_count = len(reader.pages)
+                for p in reader.pages:
+                    writer.add_page(p)
+                total_pages += p_count
+                files_info.append({"name": filename, "pages": p_count, "type": "pdf"})
+            except Exception as e:
+                raise ValueError(f"Could not read PDF '{filename}': {e}")
+        else:
+            raise ValueError(f"Unsupported file format: {ext} for '{filename}'. Please upload PDF or Image.")
+            
+    if total_pages == 0:
+        raise ValueError("Uploaded files contain 0 valid pages.")
+        
+    with open(target_pdf, "wb") as f:
+        writer.write(f)
+        
+    if len(files_info) == 1:
+        display_name = files_info[0]["name"]
+    else:
+        display_name = f"{files_info[0]['name']} + {len(files_info)-1} more ({len(files_info)} files)"
+        
     job_data = {
         "id": job_id,
-        "original_name": original_name,
+        "original_name": display_name,
         "pdf_path": str(target_pdf),
-        "total_pages": page_count,
+        "total_pages": total_pages,
         "selected_pages": "all",
-        "num_pages_to_print": page_count,
+        "num_pages_to_print": total_pages,
         "copies": 1,
         "color_mode": "bw",
+        "print_side": "single",
         "rate_per_page": 2.0,
-        "total_amount": 2.0 * page_count,
+        "total_amount": 2.0 * total_pages,
         "payment_status": "pending",
         "print_status": "queued",
         "print_error": None,
+        "files_count": len(files_info),
+        "files_info": files_info,
         "created_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     }
     
@@ -95,6 +125,10 @@ def process_uploaded_file(original_name: str, file_bytes: bytes) -> dict:
     save_jobs(jobs)
     
     return job_data
+
+def process_uploaded_file(original_name: str, file_bytes: bytes) -> dict:
+    """Backward compatible wrapper for single file upload."""
+    return process_uploaded_files([(original_name, file_bytes)])
 
 def parse_page_range(range_str: str, max_pages: int) -> list[int]:
     """Parses range strings like '1, 3-5' into 1-based page numbers."""

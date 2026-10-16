@@ -153,37 +153,57 @@
         </div>
 
         <div class="dropzone" id="dropzone" onclick="document.getElementById('fileInput').click()">
-          <div class="upload-icon">📄</div>
-          <h3 style="margin-bottom: 6px;">ଫାଇଲ୍ ବାଛନ୍ତୁ କିମ୍ବା ଡ୍ରପ୍ କରନ୍ତୁ</h3>
-          <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 16px;">
+          <div class="upload-icon">📁</div>
+          <h3 style="margin-bottom: 6px;">ଫାଇଲ୍ ବାଛନ୍ତୁ କିମ୍ବା ଏଠାରେ ଡ୍ରପ୍ କରନ୍ତୁ</h3>
+          <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 12px;">
             PDF, Word (.docx) କିମ୍ବା ଫଟୋ (JPG, PNG) ସମର୍ଥିତ
           </p>
-          <button class="btn btn-primary" type="button" style="max-width: 220px; margin: 0 auto;">
+          <div style="display: inline-block; background: #e0f2fe; color: #0369a1; font-size: 0.8rem; font-weight: 700; padding: 4px 12px; border-radius: 999px; margin-bottom: 14px;">
+            ✨ ଗୋଟିଏ କିମ୍ବା ଏକାଧିକ ଫାଇଲ୍ (Multiple Files) ଏକାଥରେ ଚୟନ କରିପାରିବେ
+          </div>
+          <br>
+          <button class="btn btn-primary" type="button" style="max-width: 240px; margin: 0 auto;">
             📂 ମୋବାଇଲ୍ ରୁ ଫାଇଲ୍ ବାଛନ୍ତୁ
           </button>
-          <input type="file" id="fileInput" accept=".pdf,.doc,.docx,.jpg,.jpeg,.png,.webp" style="display: none;" onchange="handleFileSelected(this.files[0])">
+          <input type="file" id="fileInput" accept=".pdf,.doc,.docx,.jpg,.jpeg,.png,.webp" multiple style="display: none;" onchange="handleFilesSelected(this.files)">
           <p style="font-size: 0.76rem; color: #64748b; margin-top: 12px; margin-bottom: 0;">
-            💡 ଫାଇଲ୍ ଅପଲୋଡ୍ କରିବା ପରେ ତୁରନ୍ତ Payment Gateway ସ୍କ୍ରିନ୍ ଆସିବ।
+            💡 ଫାଇଲ୍ ଅପଲୋଡ୍ ପରେ ସେଟିଙ୍ଗ୍ ଏବଂ Payment Gateway ସ୍କ୍ରିନ୍ ଆସିବ।
           </p>
         </div>
 
         <div id="uploadProgress" style="display: none; text-align: center; padding: 24px;">
           <div style="font-size: 1.8rem; margin-bottom: 8px;">⏳</div>
-          <h4 style="color: var(--primary);">ଫାଇଲ୍ ପ୍ରୋସେସ୍ ହେଉଛି...</h4>
+          <h4 style="color: var(--primary);">ଫାଇଲ୍(ଗୁଡ଼ିକ) ପ୍ରୋସେସ୍ ହେଉଛି...</h4>
           <p style="font-size: 0.82rem; color: var(--text-muted);">ଦୟାକରି କିଛି ସେକେଣ୍ଡ୍ ଅପେକ୍ଷା କରନ୍ତୁ</p>
         </div>
       </div>
 
       <!-- STEP 2: CONFIGURE -->
       <div class="card" id="stepConfig" style="display: none;">
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; border-bottom: 1px solid var(--border); padding-bottom: 10px;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; border-bottom: 1px solid var(--border); padding-bottom: 10px;">
           <div>
             <h4 id="cfgFileName" style="color: #0f172a; margin-bottom: 2px;">Document.pdf</h4>
-            <span style="font-size: 0.82rem; color: var(--text-muted);">ମୋଟ ପେଜ୍: <b id="cfgTotalPages">1</b></span>
+            <span style="font-size: 0.82rem; color: var(--text-muted);">ମୋଟ ପେଜ୍: <b id="cfgTotalPages" style="color: #0284c7; font-size: 0.95rem;">1</b></span>
           </div>
           <button onclick="resetFlow()" style="background: none; border: none; color: #ef4444; font-size: 0.85rem; font-weight: 700; cursor: pointer;">
-            ✕ ବଦଳାନ୍ତୁ
+            ✕ ନୂଆ ଅପଲୋଡ୍
           </button>
+        </div>
+
+        <!-- MULTI-FILE LIST & ADD MORE FILES -->
+        <div id="multiFilesBox" style="background: #f8fafc; border: 1.5px dashed #cbd5e1; border-radius: 12px; padding: 12px; margin-bottom: 16px;">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+            <span style="font-size: 0.84rem; font-weight: 700; color: #334155;">
+              📑 ଅପଲୋଡ୍ ହୋଇଥିବା ଫାଇଲ୍ (<span id="filesCountBadge" style="color: #0284c7;">1</span> ଟି):
+            </span>
+            <button type="button" onclick="document.getElementById('fileInputAddMore').click()" class="btn btn-sm btn-outline" style="background: #ffffff; padding: 4px 10px; font-size: 0.78rem; font-weight: 700; border-color: #0284c7; color: #0284c7;">
+              ➕ ଆଉ ଏକ ଫାଇଲ୍ ଯୋଡ଼ନ୍ତୁ
+            </button>
+            <input type="file" id="fileInputAddMore" accept=".pdf,.doc,.docx,.jpg,.jpeg,.png,.webp" multiple style="display: none;" onchange="handleAddMoreFiles(this.files)">
+          </div>
+          <div id="filesListContainer" style="display: flex; flex-direction: column; gap: 6px; max-height: 160px; overflow-y: auto;">
+            <!-- Dynamic File Items -->
+          </div>
         </div>
 
         <!-- Color Mode -->
@@ -317,42 +337,42 @@
           </a>
         </div>
 
+        <!-- 1-CLICK UPI INTENT BUTTON (MOBILE APP) -->
+        <div style="margin-bottom: 12px;">
+          <a href="#" id="directUpiPayLink" target="_top" class="btn btn-primary" style="background: linear-gradient(135deg, #16a34a 0%, #15803d 100%); padding: 14px 22px; font-size: 1.05rem; font-weight: 800; display: inline-flex; align-items: center; justify-content: center; gap: 8px; width: 100%; box-sizing: border-box; border-radius: 12px; box-shadow: 0 4px 12px rgba(22, 163, 74, 0.25); text-decoration: none; color: #ffffff;">
+            ⚡ PhonePe / GPay / Paytm ରେ ସିଧା ପେ କରନ୍ତୁ
+          </a>
+        </div>
+
+        <!-- QUICK APP SELECTION CHIPS (DIRECT NATIVE INTENT) -->
+        <div id="quickAppChips" style="display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; margin-bottom: 14px;">
+          <a href="#" id="quickPhonepeLink" target="_top" style="background: #f5f3ff; color: #5b21b6; border: 1.5px solid #ddd6fe; border-radius: 999px; padding: 8px 16px; font-size: 0.88rem; font-weight: 700; text-decoration: none; display: inline-flex; align-items: center; gap: 6px;">
+            🟣 PhonePe
+          </a>
+          <a href="#" id="quickGpayLink" target="_top" style="background: #eff6ff; color: #1d4ed8; border: 1.5px solid #bfdbfe; border-radius: 999px; padding: 8px 16px; font-size: 0.88rem; font-weight: 700; text-decoration: none; display: inline-flex; align-items: center; gap: 6px;">
+            🔵 Google Pay
+          </a>
+          <a href="#" id="quickPaytmLink" target="_top" style="background: #f0fdf4; color: #0284c7; border: 1.5px solid #bae6fd; border-radius: 999px; padding: 8px 16px; font-size: 0.88rem; font-weight: 700; text-decoration: none; display: inline-flex; align-items: center; gap: 6px;">
+            🔷 Paytm
+          </a>
+        </div>
+
         <!-- SMBUPI DUAL-CURRENCY GATEWAY (UPI & BINANCE PAY) -->
         <div id="smbupiAutoDetectBox" style="display: none; background: #ecfdf5; border: 2px solid #10b981; border-radius: 12px; padding: 14px 16px; margin-bottom: 16px; text-align: center;">
           <div style="font-weight: 800; color: #047857; font-size: 1rem; display: flex; align-items: center; justify-content: center; gap: 8px; margin-bottom: 8px;">
             <span style="font-size: 1.2rem;">⚡</span> SMB Dual-Currency Gateway ସକ୍ରିୟ
           </div>
           <p style="font-size: 0.85rem; color: #065f46; margin: 0 0 12px; line-height: 1.4;">
-            ତଳେ ଆପଣଙ୍କ ପସନ୍ଦର ପେମେଣ୍ଟ୍ ମାଧ୍ୟମ ଚୟନ କରନ୍ତୁ। ପେମେଣ୍ଟ୍ ସରିବା ମାତ୍ରେ କାଗଜ ସିଧା ପ୍ରିଣ୍ଟ୍ ହୋଇଯିବ!
+            ପେମେଣ୍ଟ୍ ସରିବା ମାତ୍ରେ ସିଷ୍ଟମ୍ ଆପେ ଆପେ ଯାଞ୍ଚ କରି କାଗଜ ସିଧା ପ୍ରିଣ୍ଟ୍ ବାହାର କରିଦେବ (Automatic Verification)!
           </p>
           <div style="display: flex; flex-direction: column; gap: 8px;">
-            <button type="button" id="btnSmbUpiPay" onclick="triggerPayApp('smbupi_upi')" class="btn btn-primary" style="background: linear-gradient(135deg, #059669 0%, #047857 100%); border-color: #047857; padding: 12px 18px; font-weight: 800; font-size: 1rem; display: flex; align-items: center; justify-content: center; gap: 8px; width: 100%; box-sizing: border-box; border-radius: 10px; box-shadow: 0 4px 12px rgba(5, 150, 105, 0.25); cursor: pointer; color: #fff;">
-              ⚡ UPI ରେ ପେ କରନ୍ତୁ (GPay / PhonePe / Paytm)
-            </button>
-            <button type="button" id="btnSmbBinancePay" onclick="triggerPayApp('smbupi_binance')" class="btn" style="background: linear-gradient(135deg, #f0b90b 0%, #d9a404 100%); border: 1.5px solid #c99400; padding: 11px 18px; font-weight: 800; font-size: 0.95rem; display: flex; align-items: center; justify-content: center; gap: 8px; width: 100%; box-sizing: border-box; border-radius: 10px; box-shadow: 0 4px 12px rgba(240, 185, 11, 0.25); cursor: pointer; color: #181a20;">
-              🟡 Binance Pay ରେ ପେ କରନ୍ତୁ (Crypto USDT)
-            </button>
+            <a href="#" id="btnSmbUpiPay" target="_blank" class="btn btn-primary" style="background: linear-gradient(135deg, #059669 0%, #047857 100%); border-color: #047857; padding: 12px 18px; font-weight: 800; font-size: 0.95rem; display: flex; align-items: center; justify-content: center; gap: 8px; width: 100%; box-sizing: border-box; border-radius: 10px; box-shadow: 0 4px 12px rgba(5, 150, 105, 0.25); text-decoration: none; color: #fff;">
+              🌐 SMB Gateway Online Portal ଖୋଲନ୍ତୁ (New Tab)
+            </a>
+            <a href="#" id="btnSmbBinancePay" target="_blank" class="btn" style="background: linear-gradient(135deg, #f0b90b 0%, #d9a404 100%); border: 1.5px solid #c99400; padding: 11px 18px; font-weight: 800; font-size: 0.92rem; display: flex; align-items: center; justify-content: center; gap: 8px; width: 100%; box-sizing: border-box; border-radius: 10px; box-shadow: 0 4px 12px rgba(240, 185, 11, 0.25); text-decoration: none; color: #181a20;">
+              🟡 Binance Pay (Crypto USDT) ରେ ପେ କରନ୍ତୁ
+            </a>
           </div>
-        </div>
-
-        <!-- 1-CLICK UPI INTENT BUTTON (MOBILE APP) -->
-        <div style="margin-bottom: 12px;">
-          <button type="button" id="directUpiPayLink" onclick="triggerPayApp('all')" class="btn btn-primary" style="background: linear-gradient(135deg, #16a34a 0%, #15803d 100%); padding: 14px 22px; font-size: 1.05rem; font-weight: 800; display: inline-flex; align-items: center; justify-content: center; gap: 8px; width: 100%; box-sizing: border-box; border-radius: 12px; box-shadow: 0 4px 12px rgba(22, 163, 74, 0.25); cursor: pointer;">
-            ⚡ PhonePe / GPay / Paytm ରେ ସିଧା ପେ କରନ୍ତୁ
-          </button>
-        </div>
-
-        <!-- QUICK APP SELECTION CHIPS -->
-        <div id="quickAppChips" style="display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; margin-bottom: 12px;">
-          <button type="button" id="quickPhonepeLink" onclick="triggerPayApp('phonepe')" style="background: #f5f3ff; color: #5b21b6; border: 1.5px solid #ddd6fe; border-radius: 999px; padding: 8px 16px; font-size: 0.88rem; font-weight: 700; cursor: pointer; display: inline-flex; align-items: center; gap: 6px;">
-            🟣 PhonePe
-          </button>
-          <button type="button" id="quickGpayLink" onclick="triggerPayApp('gpay')" style="background: #eff6ff; color: #1d4ed8; border: 1.5px solid #bfdbfe; border-radius: 999px; padding: 8px 16px; font-size: 0.88rem; font-weight: 700; cursor: pointer; display: inline-flex; align-items: center; gap: 6px;">
-            🔵 Google Pay
-          </button>
-          <button type="button" id="quickPaytmLink" onclick="triggerPayApp('paytm')" style="background: #f0fdf4; color: #0284c7; border: 1.5px solid #bae6fd; border-radius: 999px; padding: 8px 16px; font-size: 0.88rem; font-weight: 700; cursor: pointer; display: inline-flex; align-items: center; gap: 6px;">
-            🔷 Paytm
-          </button>
         </div>
 
         <!-- SECURITY DECLINE HELP NOTE -->

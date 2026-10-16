@@ -8,6 +8,7 @@ let statusPollingInterval = null;
 let paytmPollInterval = null;
 let phonepePollInterval = null;
 let smbupiPollInterval = null;
+let unifiedStatusPollInterval = null;
 
 document.addEventListener("DOMContentLoaded", async () => {
   await initShop();
@@ -103,14 +104,59 @@ function setupDragAndDrop() {
   });
 
   dropzone.addEventListener("drop", e => {
-    if (e.dataTransfer.files && e.dataTransfer.files[0]) {
-      handleFileSelected(e.dataTransfer.files[0]);
+    e.preventDefault();
+    if (e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+      handleFilesSelected(e.dataTransfer.files);
     }
   });
 }
 
-async function handleFileSelected(file) {
-  if (!file) return;
+function escapeHtml(text) {
+  if (!text) return "";
+  return String(text).replace(/[&<>"']/g, m => ({
+    "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"
+  })[m]);
+}
+
+function renderFilesList(filesInfo, originalName) {
+  const container = document.getElementById("filesListContainer");
+  const countBadge = document.getElementById("filesCountBadge");
+  if (!container) return;
+
+  let list = Array.isArray(filesInfo) && filesInfo.length > 0 ? filesInfo : [];
+  if (list.length === 0 && originalName) {
+    list = [{ name: originalName, pages: currentJob?.total_pages || 1, type: "pdf" }];
+  }
+
+  if (countBadge) countBadge.textContent = list.length;
+
+  if (list.length === 0) {
+    container.innerHTML = `<div style="font-size:0.8rem;color:#94a3b8;padding:6px;text-align:center;">କୌଣସି ଫାଇଲ୍ ଯୋଡ଼ା ହୋଇନାହିଁ</div>`;
+    return;
+  }
+
+  container.innerHTML = list.map((f, idx) => {
+    const isImg = f.type === "image" || /\.(jpe?g|png|webp|bmp)$/i.test(f.name);
+    const icon = isImg ? "🖼️" : "📄";
+    const pagesText = (f.pages || 1) + " ପେଜ୍";
+    return `
+      <div style="display:flex;align-items:center;justify-content:space-between;background:#ffffff;border:1px solid #e2e8f0;border-radius:8px;padding:6px 10px;font-size:0.82rem;">
+        <div style="display:flex;align-items:center;gap:8px;overflow:hidden;flex:1;min-width:0;">
+          <span style="font-size:1.1rem;flex-shrink:0;">${icon}</span>
+          <span style="font-weight:600;color:#1e293b;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${escapeHtml(f.name)}">
+            ${escapeHtml(f.name)}
+          </span>
+        </div>
+        <span style="background:#f1f5f9;color:#0284c7;font-weight:700;font-size:0.76rem;padding:2px 8px;border-radius:999px;white-space:nowrap;margin-left:8px;flex-shrink:0;">
+          ${pagesText}
+        </span>
+      </div>
+    `;
+  }).join("");
+}
+
+async function handleFilesSelected(files) {
+  if (!files || files.length === 0) return;
   if (!currentShop) {
     alert("ଦୋକାନ ସୂଚନା ଲୋଡ୍ ହୋଇନାହିଁ। ଦୟାକରି ପୃଷ୍ଠା ରିଫ୍ରେସ୍ କରନ୍ତୁ।");
     return;
@@ -121,7 +167,10 @@ async function handleFileSelected(file) {
 
   const formData = new FormData();
   formData.append("shop_id", currentShop.shop_id);
-  formData.append("file", file);
+  for (let i = 0; i < files.length; i++) {
+    formData.append("files", files[i]);
+  }
+  formData.append("file", files[0]);
 
   try {
     const res = await fetch("/api/customer/upload", {
@@ -140,6 +189,9 @@ async function handleFileSelected(file) {
     document.getElementById("cfgFileName").textContent = currentJob.original_name || "Document";
     document.getElementById("cfgTotalPages").textContent = currentJob.total_pages || 1;
 
+    const filesInfo = data.files_info || currentJob.files_info || [];
+    renderFilesList(filesInfo, currentJob.original_name);
+
     selectedCopies = 1;
     selectedColorMode = "bw";
     selectedPrintSide = "single";
@@ -156,11 +208,53 @@ async function handleFileSelected(file) {
     if (sideD) sideD.className = "mode-card";
 
     calculateTotal();
-
     setStep(2);
   } catch (err) {
     alert("ଭୁଲ୍: " + err.message);
     resetFlow();
+  }
+}
+
+function handleFileSelected(file) {
+  if (file) handleFilesSelected([file]);
+}
+
+async function handleAddMoreFiles(files) {
+  if (!files || files.length === 0 || !currentJob) return;
+
+  const countBadge = document.getElementById("filesCountBadge");
+  const origBadgeText = countBadge ? countBadge.textContent : "";
+  if (countBadge) countBadge.textContent = "⏳...";
+
+  const formData = new FormData();
+  for (let i = 0; i < files.length; i++) {
+    formData.append("files", files[i]);
+  }
+
+  try {
+    const res = await fetch(`/api/customer/jobs/${currentJob.id}/add-files`, {
+      method: "POST",
+      body: formData
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      throw new Error(data.detail || "ଆଉ ଏକ ଫାଇଲ୍ ଯୋଡ଼ିବା ବିଫଳ ହେଲା!");
+    }
+
+    currentJob = Object.assign({}, currentJob, data.job || {}, data);
+    document.getElementById("cfgFileName").textContent = currentJob.original_name || "Documents";
+    document.getElementById("cfgTotalPages").textContent = currentJob.total_pages || 1;
+
+    const filesInfo = data.files_info || currentJob.files_info || [];
+    renderFilesList(filesInfo, currentJob.original_name);
+
+    calculateTotal();
+  } catch (err) {
+    alert("ଭୁଲ୍: " + err.message);
+    if (countBadge) countBadge.textContent = origBadgeText;
+  } finally {
+    const fileAddInput = document.getElementById("fileInputAddMore");
+    if (fileAddInput) fileAddInput.value = "";
   }
 }
 
@@ -293,6 +387,21 @@ function calculateTotal() {
   document.getElementById("sumTotal").textContent = `₹${total.toFixed(2)}`;
 }
 
+function buildUpiIntentUri(job, shop) {
+  if (job && job.upi_intent && String(job.upi_intent).startsWith("upi://")) {
+    return job.upi_intent;
+  }
+  if (job && job.upi_uri && String(job.upi_uri).startsWith("upi://")) {
+    return job.upi_uri;
+  }
+  const vpa = job?.upi_id || shop?.upi_id || shop?.paytm_vpa || "";
+  if (!vpa) return "";
+  const name = encodeURIComponent(shop?.shop_name || "SmartPrint");
+  const amt = parseFloat(job?.total_amount || 0).toFixed(2);
+  const note = encodeURIComponent(`Print #${(job?.id || '').slice(-6)}`);
+  return `upi://pay?pa=${encodeURIComponent(vpa)}&pn=${name}&am=${amt}&cu=INR&tn=${note}&tr=${encodeURIComponent(job?.id || '')}`;
+}
+
 async function proceedToPayment() {
   if (!currentJob) return;
 
@@ -315,7 +424,7 @@ async function proceedToPayment() {
     if (!res.ok) throw new Error(data.detail || "Error configuring job");
 
     // Robust merge: ensure all URLs, flags, and QR codes from data and data.job are preserved!
-    currentJob = Object.assign({}, data.job || {}, data);
+    currentJob = Object.assign({}, currentJob, data.job || {}, data);
 
     // Show Step 3
     const totalAmt = parseFloat(currentJob.total_amount || 0).toFixed(2);
@@ -351,76 +460,89 @@ async function proceedToPayment() {
       vpaBox.style.display = "none";
     }
 
-    // Paytm Business 0% Auto-Verification
-    const isPaytm = Boolean(currentJob.is_paytm_auto);
-    const paytmBox = document.getElementById("paytmAutoDetectBox");
-    if (paytmBox) {
-      paytmBox.style.display = isPaytm ? "block" : "none";
-    }
-    if (isPaytm) {
-      startPaytmAutoVerification(currentJob.id);
-    } else if (paytmPollInterval) {
-      clearInterval(paytmPollInterval);
-      paytmPollInterval = null;
-    }
+    // Configure direct UPI links and intent queries
+    const upiUri = buildUpiIntentUri(currentJob, currentShop);
+    const rawQuery = upiUri.includes("?") ? upiUri.split("?")[1] : "";
 
-    // PhonePe Standard Checkout Auto-Verification
-    const isPhonePe = Boolean(currentJob.is_phonepe_auto && currentJob.phonepe_pay_url);
-    const phonepeBox = document.getElementById("phonepeAutoDetectBox");
-    const phonepeBtn = document.getElementById("btnPhonePePay");
-    if (phonepeBox) {
-      phonepeBox.style.display = isPhonePe ? "block" : "none";
+    const directUpiBtn = document.getElementById("directUpiPayLink");
+    const phonepeBtn = document.getElementById("quickPhonepeLink");
+    const gpayBtn = document.getElementById("quickGpayLink");
+    const paytmBtn = document.getElementById("quickPaytmLink");
+
+    if (directUpiBtn) {
+      directUpiBtn.href = upiUri || (currentJob.smbupi_upi_url || "#");
+      directUpiBtn.onclick = (e) => { triggerPayApp("auto", e); };
     }
-    if (phonepeBtn && currentJob.phonepe_pay_url) {
-      phonepeBtn.href = currentJob.phonepe_pay_url;
+    if (phonepeBtn) {
+      phonepeBtn.href = rawQuery ? `phonepe://pay?${rawQuery}` : (upiUri || "#");
+      phonepeBtn.onclick = (e) => { triggerPayApp("phonepe", e); };
     }
-    if (isPhonePe) {
-      startPhonePeAutoVerification(currentJob.id);
-    } else if (phonepePollInterval) {
-      clearInterval(phonepePollInterval);
-      phonepePollInterval = null;
+    if (gpayBtn) {
+      gpayBtn.href = rawQuery ? `gpay://upi/pay?${rawQuery}` : (upiUri || "#");
+      gpayBtn.onclick = (e) => { triggerPayApp("gpay", e); };
+    }
+    if (paytmBtn) {
+      paytmBtn.href = rawQuery ? `paytmmp://pay?${rawQuery}` : (upiUri || "#");
+      paytmBtn.onclick = (e) => { triggerPayApp("paytm", e); };
     }
 
     // SMB UPI (Universal Dual-Currency Gateway: UPI & Binance Pay)
     const isSmbUpi = Boolean(currentJob.is_smbupi_auto && (currentJob.smbupi_pay_url || currentJob.smbupi_upi_url));
     const smbupiBox = document.getElementById("smbupiAutoDetectBox");
+    const btnSmbUpi = document.getElementById("btnSmbUpiPay");
+    const btnSmbBinance = document.getElementById("btnSmbBinancePay");
+
     if (smbupiBox) {
       smbupiBox.style.display = isSmbUpi ? "block" : "none";
     }
+    if (btnSmbUpi) {
+      btnSmbUpi.href = currentJob.smbupi_upi_url || currentJob.smbupi_payment_url || "#";
+      btnSmbUpi.target = "_blank";
+    }
+    if (btnSmbBinance) {
+      btnSmbBinance.href = currentJob.smbupi_binance_url || (currentJob.smbupi_token ? `https://smbupi.com/pay/binance?token=${currentJob.smbupi_token}&order_id=${currentJob.id}` : "#");
+      btnSmbBinance.target = "_blank";
+    }
+
+    // PhonePe Standard Checkout
+    const isPhonePe = Boolean(currentJob.is_phonepe_auto && currentJob.phonepe_pay_url);
+    const phonepeBox = document.getElementById("phonepeAutoDetectBox");
+    const btnPhonePe = document.getElementById("btnPhonePePay");
+    if (phonepeBox) {
+      phonepeBox.style.display = isPhonePe ? "block" : "none";
+    }
+    if (btnPhonePe && currentJob.phonepe_pay_url) {
+      btnPhonePe.href = currentJob.phonepe_pay_url;
+      btnPhonePe.target = "_blank";
+    }
+
+    // Paytm Business
+    const isPaytm = Boolean(currentJob.is_paytm_auto);
+    const paytmBox = document.getElementById("paytmAutoDetectBox");
+    if (paytmBox) {
+      paytmBox.style.display = isPaytm ? "block" : "none";
+    }
+
+    // START AUTO-VERIFICATION SERVICES IMMEDIATELY
     if (isSmbUpi) {
       startSmbUpiAutoVerification(currentJob.id);
-    } else if (smbupiPollInterval) {
-      clearInterval(smbupiPollInterval);
-      smbupiPollInterval = null;
+    }
+    if (isPaytm) {
+      startPaytmAutoVerification(currentJob.id);
+    }
+    if (isPhonePe) {
+      startPhonePeAutoVerification(currentJob.id);
     }
 
-    // Determine optimal UPI payment URL
-    let targetPayUrl = "";
-    if (isSmbUpi && currentJob.smbupi_upi_url) {
-      targetPayUrl = currentJob.smbupi_upi_url;
-    } else if (isPhonePe && currentJob.phonepe_pay_url) {
-      targetPayUrl = currentJob.phonepe_pay_url;
-    } else if (currentJob.upi_uri) {
-      targetPayUrl = currentJob.upi_uri;
-    }
-
-    const upiLinkBtn = document.getElementById("directUpiPayLink");
-    if (upiLinkBtn) {
-      upiLinkBtn.style.display = (targetPayUrl || currentJob.upi_uri) ? "inline-flex" : "none";
-    }
+    startUnifiedStatusPolling(currentJob.id);
 
     setStep(3);
 
-    // AUTOMATICALLY OPEN UPI APP / GATEWAY ON MOBILE
+    // On mobile devices, show friendly guide banner
     const isMobileDevice = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
-    if (targetPayUrl && isMobileDevice) {
-      const redirectNotice = document.getElementById("autoRedirectNotice");
-      if (redirectNotice) {
-        redirectNotice.style.display = "block";
-      }
-      setTimeout(() => {
-        triggerPayApp('auto');
-      }, 500);
+    const redirectNotice = document.getElementById("autoRedirectNotice");
+    if (redirectNotice) {
+      redirectNotice.style.display = isMobileDevice ? "block" : "none";
     }
 
   } catch (err) {
@@ -428,78 +550,64 @@ async function proceedToPayment() {
   }
 }
 
-function triggerPayApp(target) {
+function triggerPayApp(target, event) {
   if (!currentJob) return;
 
-  // 1. Direct Binance Pay selection (Crypto USDT)
+  const upiUri = buildUpiIntentUri(currentJob, currentShop);
+  const rawQuery = upiUri.includes("?") ? upiUri.split("?")[1] : "";
+
   if (target === "smbupi_binance") {
     const binanceUrl = currentJob.smbupi_binance_url || 
       (currentJob.smbupi_token ? `https://smbupi.com/pay/binance?token=${currentJob.smbupi_token}&order_id=${currentJob.id}` : "");
     if (binanceUrl) {
       window.open(binanceUrl, "_blank");
-      return;
     }
+    return;
   }
 
-  // 2. Direct SMB UPI Checkout selection
   if (target === "smbupi_upi" || target === "smbupi") {
     const upiPayUrl = currentJob.smbupi_upi_url || currentJob.smbupi_payment_url;
     if (upiPayUrl) {
-      window.location.href = upiPayUrl;
-      return;
-    }
-  }
-
-  // 3. If PhonePe Gateway is enabled:
-  if (target === "phonepe_checkout" || (currentJob.is_phonepe_auto && currentJob.phonepe_pay_url && target === "auto")) {
-    window.location.href = currentJob.phonepe_pay_url;
-    return;
-  }
-
-  // 4. Mobile 1-Click App Intent or Custom UPI Intent
-  const upi = currentJob.upi_uri || "";
-  if (target === "auto") {
-    const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
-    if (!isMobile) return;
-    if (currentJob.is_smbupi_auto && currentJob.smbupi_upi_url) {
-      window.location.href = currentJob.smbupi_upi_url;
-      return;
-    }
-    if (upi) {
-      window.location.href = upi;
-      return;
+      window.open(upiPayUrl, "_blank");
     }
     return;
   }
-
-  if (!upi) {
-    if (currentJob.smbupi_payment_url) {
-      window.location.href = currentJob.smbupi_payment_url;
-      return;
-    }
-    alert("UPI Payment ଲିଙ୍କ୍ ପ୍ରସ୍ତୁତ ହୋଇପାରିଲା ନାହିଁ। ଦୟାକରି QR କୋଡ୍ ସ୍କାନ୍ କରନ୍ତୁ କିମ୍ବା UPI ID କପି କରନ୍ତୁ।");
-    return;
-  }
-
-  const rawQuery = upi.includes("?") ? upi.split("?")[1] : upi.replace(/^upi:\/\/pay\?/, "");
 
   if (target === "phonepe") {
-    window.location.href = `phonepe://pay?${rawQuery}`;
-    setTimeout(() => { window.location.href = upi; }, 1200);
-  } else if (target === "gpay") {
-    window.location.href = `gpay://upi/pay?${rawQuery}`;
-    setTimeout(() => { window.location.href = upi; }, 1200);
-  } else if (target === "paytm") {
-    window.location.href = `paytmmp://pay?${rawQuery}`;
-    setTimeout(() => { window.location.href = upi; }, 1200);
-  } else {
-    // Universal intent - triggers Android app selector (PhonePe, GPay, Paytm)
-    window.location.href = upi;
+    const targetUrl = rawQuery ? `phonepe://pay?${rawQuery}` : upiUri;
+    if (targetUrl) {
+      window.location.href = targetUrl;
+      setTimeout(() => { if (upiUri) window.location.href = upiUri; }, 1500);
+    }
+    return;
   }
-}
 
-function setupQuickUpiChips(upiUri) {
-  // Handled by triggerPayApp onclick
+  if (target === "gpay") {
+    const targetUrl = rawQuery ? `gpay://upi/pay?${rawQuery}` : upiUri;
+    if (targetUrl) {
+      window.location.href = targetUrl;
+      setTimeout(() => { if (upiUri) window.location.href = upiUri; }, 1500);
+    }
+    return;
+  }
+
+  if (target === "paytm") {
+    const targetUrl = rawQuery ? `paytmmp://pay?${rawQuery}` : upiUri;
+    if (targetUrl) {
+      window.location.href = targetUrl;
+      setTimeout(() => { if (upiUri) window.location.href = upiUri; }, 1500);
+    }
+    return;
+  }
+
+  // Universal fallback
+  if (upiUri) {
+    window.location.href = upiUri;
+  } else if (currentJob.smbupi_upi_url || currentJob.smbupi_payment_url) {
+    window.open(currentJob.smbupi_upi_url || currentJob.smbupi_payment_url, "_blank");
+  } else {
+    alert("UPI Payment ଲିଙ୍କ୍ ପ୍ରସ୍ତୁତ ହୋଇପାରିଲା ନାହିଁ। ଦୟାକରି QR କୋଡ୍ ସ୍କାନ୍ କରନ୍ତୁ କିମ୍ବା UPI ID କପି କରନ୍ତୁ।");
+  }
 }
 
 async function resumeJobPaymentStatus(jobId) {
@@ -517,11 +625,14 @@ async function resumeJobPaymentStatus(jobId) {
     } else {
       if (job.is_smbupi_auto || job.payment_method === "smbupi") {
         startSmbUpiAutoVerification(job.id);
-      } else if (job.is_phonepe_auto || job.payment_method === "phonepe") {
+      }
+      if (job.is_phonepe_auto || job.payment_method === "phonepe") {
         startPhonePeAutoVerification(job.id);
-      } else if (job.is_paytm_auto || job.payment_method === "paytm_qr") {
+      }
+      if (job.is_paytm_auto || job.payment_method === "paytm_qr") {
         startPaytmAutoVerification(job.id);
       }
+      startUnifiedStatusPolling(job.id);
       setStep(3);
     }
   } catch (e) {
@@ -529,10 +640,43 @@ async function resumeJobPaymentStatus(jobId) {
   }
 }
 
+function startUnifiedStatusPolling(jobId) {
+  if (unifiedStatusPollInterval) clearInterval(unifiedStatusPollInterval);
+
+  unifiedStatusPollInterval = setInterval(async () => {
+    if (!currentJob || currentJob.id !== jobId) {
+      clearInterval(unifiedStatusPollInterval);
+      unifiedStatusPollInterval = null;
+      return;
+    }
+
+    try {
+      const res = await fetch(`/api/customer/jobs/${jobId}/status`);
+      if (!res.ok) return;
+      const job = await res.json();
+      if (job.payment_status === "paid" || job.print_status === "printing" || job.print_status === "printed") {
+        clearInterval(unifiedStatusPollInterval);
+        unifiedStatusPollInterval = null;
+        if (smbupiPollInterval) { clearInterval(smbupiPollInterval); smbupiPollInterval = null; }
+        if (paytmPollInterval) { clearInterval(paytmPollInterval); paytmPollInterval = null; }
+        if (phonepePollInterval) { clearInterval(phonepePollInterval); phonepePollInterval = null; }
+
+        currentJob = job;
+        setStep(4);
+        document.getElementById("waitingTitle").textContent = "⚡ ପେମେଣ୍ଟ୍ ସଫଳ (Verified)!";
+        document.getElementById("waitingDesc").textContent = "ପେମେଣ୍ଟ୍ କନଫର୍ମ ହୋଇଛି! ପ୍ରିଣ୍ଟର୍ ରୁ କାଗଜ ବାହାରୁଛି...";
+        startPollingPrintStatus();
+      }
+    } catch (e) {
+      console.log("Unified status polling error:", e);
+    }
+  }, 2500);
+}
+
 function startSmbUpiAutoVerification(jobId) {
   if (smbupiPollInterval) clearInterval(smbupiPollInterval);
 
-  smbupiPollInterval = setInterval(async () => {
+  const checkStatus = async () => {
     if (!currentJob || currentJob.id !== jobId) {
       clearInterval(smbupiPollInterval);
       smbupiPollInterval = null;
@@ -546,9 +690,10 @@ function startSmbUpiAutoVerification(jobId) {
       if (!res.ok) return;
 
       const data = await res.json();
-      if (data.status === "success" || (data.job && data.job.payment_status === "paid")) {
+      if (data.status === "success" || data.success || (data.job && data.job.payment_status === "paid")) {
         clearInterval(smbupiPollInterval);
         smbupiPollInterval = null;
+        if (unifiedStatusPollInterval) { clearInterval(unifiedStatusPollInterval); unifiedStatusPollInterval = null; }
 
         currentJob = data.job || currentJob;
 
@@ -561,13 +706,18 @@ function startSmbUpiAutoVerification(jobId) {
     } catch (err) {
       console.log("SMB UPI auto-verification polling error:", err);
     }
-  }, 3500);
+  };
+
+  // Immediate check
+  checkStatus();
+  // Poll every 2500ms
+  smbupiPollInterval = setInterval(checkStatus, 2500);
 }
 
 function startPhonePeAutoVerification(jobId) {
   if (phonepePollInterval) clearInterval(phonepePollInterval);
 
-  phonepePollInterval = setInterval(async () => {
+  const checkStatus = async () => {
     if (!currentJob || currentJob.id !== jobId) {
       clearInterval(phonepePollInterval);
       phonepePollInterval = null;
@@ -584,6 +734,7 @@ function startPhonePeAutoVerification(jobId) {
       if (data.status === "COMPLETED" || (data.job && data.job.payment_status === "paid")) {
         clearInterval(phonepePollInterval);
         phonepePollInterval = null;
+        if (unifiedStatusPollInterval) { clearInterval(unifiedStatusPollInterval); unifiedStatusPollInterval = null; }
 
         currentJob = data.job || currentJob;
 
@@ -596,13 +747,16 @@ function startPhonePeAutoVerification(jobId) {
     } catch (err) {
       console.log("PhonePe auto-verification polling error:", err);
     }
-  }, 3500);
+  };
+
+  checkStatus();
+  phonepePollInterval = setInterval(checkStatus, 2500);
 }
 
 function startPaytmAutoVerification(jobId) {
   if (paytmPollInterval) clearInterval(paytmPollInterval);
 
-  paytmPollInterval = setInterval(async () => {
+  const checkStatus = async () => {
     if (!currentJob || currentJob.id !== jobId) {
       clearInterval(paytmPollInterval);
       paytmPollInterval = null;
@@ -619,6 +773,7 @@ function startPaytmAutoVerification(jobId) {
       if (data.status === "TXN_SUCCESS" || (data.job && data.job.payment_status === "paid")) {
         clearInterval(paytmPollInterval);
         paytmPollInterval = null;
+        if (unifiedStatusPollInterval) { clearInterval(unifiedStatusPollInterval); unifiedStatusPollInterval = null; }
 
         currentJob = data.job || currentJob;
 
@@ -631,7 +786,10 @@ function startPaytmAutoVerification(jobId) {
     } catch (err) {
       console.log("Paytm auto-verification polling error:", err);
     }
-  }, 3500);
+  };
+
+  checkStatus();
+  paytmPollInterval = setInterval(checkStatus, 2500);
 }
 
 function copyUpiId() {
@@ -646,31 +804,32 @@ function copyUpiId() {
 
 async function claimPaymentDone() {
   if (!currentJob) return;
-  if (paytmPollInterval) {
-    clearInterval(paytmPollInterval);
-    paytmPollInterval = null;
-  }
-  if (phonepePollInterval) {
-    clearInterval(phonepePollInterval);
-    phonepePollInterval = null;
-  }
-  if (smbupiPollInterval) {
-    clearInterval(smbupiPollInterval);
-    smbupiPollInterval = null;
-  }
+
   const btn = document.getElementById("btnClaimPaid");
   btn.disabled = true;
-  btn.textContent = "⏳ ଯାଞ୍ଚ ଅନୁରୋଧ ପଠାଯାଉଛି...";
+  btn.textContent = "⏳ ଯାଞ୍ଚ ହେଉଛି (Verifying Payment)...";
 
   try {
     const res = await fetch(`/api/customer/jobs/${currentJob.id}/pay-claimed`, {
       method: "POST"
     });
-    if (!res.ok) throw new Error("Claim failed");
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.detail || "Claim failed");
 
+    // If backend auto-verified via SMB UPI or Paytm:
+    if (data.verified || data.auto_printed || (data.job && data.job.payment_status === "paid")) {
+      currentJob = data.job || currentJob;
+      setStep(4);
+      document.getElementById("waitingTitle").textContent = "⚡ ପେମେଣ୍ଟ୍ ସଫଳ (Verified)!";
+      document.getElementById("waitingDesc").textContent = "ପେମେଣ୍ଟ୍ କନଫର୍ମ ହୋଇଛି! ପ୍ରିଣ୍ଟର୍ ରୁ କାଗଜ ବାହାରୁଛି...";
+      startPollingPrintStatus();
+      return;
+    }
+
+    // Otherwise show waiting for merchant confirmation, while keeping gateway polls active
     setStep(4);
     document.getElementById("waitingTitle").textContent = "⏳ ଦୋକାନୀ ଯାଞ୍ଚ କରୁଛନ୍ତି...";
-    document.getElementById("waitingDesc").textContent = "ଆପଣଙ୍କ ପେମେଣ୍ଟ୍ ଦାବି ଦୋକାନୀଙ୍କ ଡ୍ୟାସବୋର୍ଡକୁ ପଠାଗଲା। ଦୋକାନୀ ନିଜ UPI ଆପ୍ ଯାଞ୍ଚ କରି Approve କଲା ପରେ କାଗଜ ପ୍ରିଣ୍ଟ୍ ବାହାରିବ।";
+    document.getElementById("waitingDesc").textContent = "ଆପଣଙ୍କ ପେମେଣ୍ଟ୍ ସୂଚନା ଦୋକାନୀଙ୍କ ଡ୍ୟାସବୋର୍ଡକୁ ପଠାଗଲା। କନଫର୍ମ ହେବା ମାତ୍ରେ କାଗଜ ପ୍ରିଣ୍ଟ୍ ବାହାରିବ।";
     startPollingPrintStatus();
   } catch (err) {
     alert("ଭୁଲ୍: " + err.message);
@@ -688,15 +847,17 @@ function startPollingPrintStatus() {
       const res = await fetch(`/api/customer/jobs/${currentJob.id}/status`);
       if (res.ok) {
         const job = await res.json();
+        currentJob = job;
         if (job.print_status === "printed") {
           clearInterval(statusPollingInterval);
+          statusPollingInterval = null;
           document.getElementById("waitingIcon").style.display = "none";
           document.getElementById("waitingTitle").style.display = "none";
           document.getElementById("waitingDesc").style.display = "none";
           document.getElementById("printSuccessArea").style.display = "block";
-        } else if (job.payment_status === "paid" && job.print_status === "printing") {
+        } else if (job.payment_status === "paid" && (job.print_status === "printing" || job.print_status === "queued")) {
           document.getElementById("waitingTitle").textContent = "🖨️ ପ୍ରିଣ୍ଟ୍ ହେଉଛି...";
-          document.getElementById("waitingDesc").textContent = "ଦୋକାନୀ ଅନୁମୋଦନ କରିଛନ୍ତି! ପ୍ରିଣ୍ଟର୍ ରୁ କାଗଜ ବାହାରୁଛି...";
+          document.getElementById("waitingDesc").textContent = "ପେମେଣ୍ଟ୍ କନଫର୍ମ ହୋଇଛି! ପ୍ରିଣ୍ଟର୍ ରୁ କାଗଜ ବାହାରୁଛି...";
         }
       }
     } catch (e) {
@@ -706,21 +867,23 @@ function startPollingPrintStatus() {
 }
 
 function resetFlow() {
-  if (statusPollingInterval) clearInterval(statusPollingInterval);
-  if (paytmPollInterval) {
-    clearInterval(paytmPollInterval);
-    paytmPollInterval = null;
-  }
-  if (phonepePollInterval) {
-    clearInterval(phonepePollInterval);
-    phonepePollInterval = null;
-  }
-  if (smbupiPollInterval) {
-    clearInterval(smbupiPollInterval);
-    smbupiPollInterval = null;
-  }
+  if (statusPollingInterval) { clearInterval(statusPollingInterval); statusPollingInterval = null; }
+  if (paytmPollInterval) { clearInterval(paytmPollInterval); paytmPollInterval = null; }
+  if (phonepePollInterval) { clearInterval(phonepePollInterval); phonepePollInterval = null; }
+  if (smbupiPollInterval) { clearInterval(smbupiPollInterval); smbupiPollInterval = null; }
+  if (unifiedStatusPollInterval) { clearInterval(unifiedStatusPollInterval); unifiedStatusPollInterval = null; }
+
   currentJob = null;
-  document.getElementById("fileInput").value = "";
+  const fileInput = document.getElementById("fileInput");
+  if (fileInput) fileInput.value = "";
+  const fileInputAddMore = document.getElementById("fileInputAddMore");
+  if (fileInputAddMore) fileInputAddMore.value = "";
+
+  const filesListContainer = document.getElementById("filesListContainer");
+  if (filesListContainer) filesListContainer.innerHTML = "";
+  const filesCountBadge = document.getElementById("filesCountBadge");
+  if (filesCountBadge) filesCountBadge.textContent = "1";
+
   document.getElementById("dropzone").style.display = "block";
   document.getElementById("uploadProgress").style.display = "none";
   document.getElementById("printSuccessArea").style.display = "none";
@@ -729,6 +892,13 @@ function resetFlow() {
   document.getElementById("waitingTitle").textContent = "ଦୋକାନୀ ଯାଞ୍ଚ କରୁଛନ୍ତି...";
   document.getElementById("waitingDesc").style.display = "block";
   document.getElementById("waitingDesc").textContent = "ଆପଣଙ୍କ ପେମେଣ୍ଟ୍ ସୂଚନା ଦୋକାନୀଙ୍କ ଡ୍ୟାସବୋର୍ଡରେ ଦେଖାଯାଉଛି। ସେ ଯାଞ୍ଚ କରି କନଫର୍ମ କଲେ ପ୍ରିଣ୍ଟର୍ ରୁ କାଗଜ ବାହାରିବ।";
+
+  const btnClaim = document.getElementById("btnClaimPaid");
+  if (btnClaim) {
+    btnClaim.disabled = false;
+    btnClaim.textContent = "✅ ମୁଁ ପେମେଣ୍ଟ୍ କରିସାରିଛି (Payment Done)";
+  }
+
   setStep(1);
 }
 
@@ -745,4 +915,3 @@ function downloadPayQr() {
   link.click();
   document.body.removeChild(link);
 }
-

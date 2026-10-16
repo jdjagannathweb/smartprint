@@ -44,7 +44,7 @@ from services.payment_service import (
     generate_qr_base64, generate_counter_qr
 )
 from services.tunnel_service import start_tunnel_thread, get_public_url
-from services.document_service import process_uploaded_file, parse_page_range, prepare_final_print_pdf, delete_job_files, cleanup_old_uploads
+from services.document_service import process_uploaded_file, process_uploaded_files, parse_page_range, prepare_final_print_pdf, delete_job_files, cleanup_old_uploads
 import threading
 import time
 
@@ -314,18 +314,29 @@ def get_customer_shop_info(slug: str):
     }
 
 @app.post("/api/customer/upload")
-async def customer_upload(shop_id: str = Form(...), file: UploadFile = File(...)):
+async def customer_upload(request: Request, shop_id: str = Form(...)):
     shop = database.get_shop_by_id(shop_id)
     if not shop:
         raise HTTPException(status_code=404, detail="Shop not found")
     if not database.is_subscription_valid(shop):
         raise HTTPException(status_code=403, detail="ଏହି ଦୋକାନର ସବସ୍କ୍ରିପସନ୍ ସମାପ୍ତ ହୋଇଯାଇଛି। ଦୟାକରି ଦୋକାନୀଙ୍କ ସହ ଯୋଗାଯୋଗ କରନ୍ତୁ।")
     
-    content = await file.read()
-    if not content:
-        raise HTTPException(status_code=400, detail="Empty file")
+    form = await request.form()
+    raw_files = form.getlist("files") or form.getlist("file")
+    if not raw_files:
+        raise HTTPException(status_code=400, detail="No files uploaded")
     
-    job = process_uploaded_file(file.filename, content)
+    files_data = []
+    for item in raw_files:
+        if isinstance(item, UploadFile):
+            content = await item.read()
+            if content:
+                files_data.append((item.filename, content))
+                
+    if not files_data:
+        raise HTTPException(status_code=400, detail="Uploaded file(s) are empty")
+    
+    job = process_uploaded_files(files_data)
     rate = float(shop.get("rate_bw", 2.0))
     total = rate * job["total_pages"]
     
@@ -350,7 +361,7 @@ async def customer_upload(shop_id: str = Form(...), file: UploadFile = File(...)
     job_record = {
         "id": job["id"],
         "shop_id": shop_id,
-        "original_name": file.filename,
+        "original_name": job["original_name"],
         "pdf_path": job["pdf_path"],
         "total_pages": job["total_pages"],
         "num_pages_to_print": job["total_pages"],
@@ -368,12 +379,76 @@ async def customer_upload(shop_id: str = Form(...), file: UploadFile = File(...)
     return {
         **job_record,
         "job": job_record,
+        "files_count": job.get("files_count", len(files_data)),
+        "files_info": job.get("files_info", []),
         "upi_uri": upi_uri,
         "qr_code": qr_b64,
         "qr_code_base64": qr_b64,
         "shop_qr_image": shop.get("shop_qr_image", ""),
         "upi_id": (shop.get("paytm_vpa") if is_paytm_auto else shop.get("upi_id")) or "",
         "is_paytm_auto": is_paytm_auto
+    }
+
+@app.post("/api/customer/jobs/{job_id}/add-files")
+async def customer_add_files(job_id: str, request: Request):
+    job = database.get_job(job_id)
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found")
+    shop = database.get_shop_by_id(job["shop_id"])
+    if not shop:
+        raise HTTPException(status_code=404, detail="Shop not found")
+        
+    form = await request.form()
+    raw_files = form.getlist("files") or form.getlist("file")
+    if not raw_files:
+        raise HTTPException(status_code=400, detail="No files uploaded")
+        
+    new_files_data = []
+    for item in raw_files:
+        if isinstance(item, UploadFile):
+            content = await item.read()
+            if content:
+                new_files_data.append((item.filename, content))
+                
+    if not new_files_data:
+        raise HTTPException(status_code=400, detail="Empty files")
+        
+    orig_path = Path(job["pdf_path"])
+    all_files_data = []
+    if orig_path.exists():
+        all_files_data.append((job["original_name"], orig_path.read_bytes()))
+    all_files_data.extend(new_files_data)
+    
+    merged = process_uploaded_files(all_files_data)
+    merged_pdf_path = Path(merged["pdf_path"])
+    if merged_pdf_path.exists() and merged_pdf_path != orig_path:
+        import shutil
+        shutil.copy2(str(merged_pdf_path), str(orig_path))
+        try:
+            merged_pdf_path.unlink(missing_ok=True)
+        except Exception:
+            pass
+            
+    rate = float(job.get("rate_per_page") or shop.get("rate_bw", 2.0))
+    copies = int(job.get("copies", 1))
+    new_total = rate * merged["total_pages"] * copies
+    
+    total_files = merged.get("files_count", len(all_files_data))
+    first_name = job["original_name"].split(" + ")[0]
+    display_name = f"{first_name} + {total_files-1} more ({total_files} files)" if total_files > 1 else first_name
+    
+    updated = database.update_job_status(job_id, {
+        "original_name": display_name,
+        "total_pages": merged["total_pages"],
+        "num_pages_to_print": merged["total_pages"],
+        "total_amount": new_total
+    })
+    
+    return {
+        **updated,
+        "job": updated,
+        "files_count": total_files,
+        "files_info": merged.get("files_info", [])
     }
 
 class CustomerConfigureRequest(BaseModel):
@@ -846,16 +921,55 @@ def customer_claim_paid(job_id: str, background_tasks: BackgroundTasks):
     job = database.get_job(job_id)
     if not job:
         raise HTTPException(status_code=404, detail="Job not found")
+        
+    if job.get("payment_status") == "paid":
+        return {"success": True, "job": job, "auto_printed": True, "verified": True}
+        
+    shop = database.get_shop_by_id(job["shop_id"])
     
-    # ⚠️ Security Rule: ONLY verified payment gateway APIs (SMB UPI, PhonePe, Paytm webhooks/API verification)
-    # trigger automated instant printing.
-    # Manual customer payment claims MUST NEVER auto-print!
-    # They require the shopkeeper to check their UPI app and click "Confirm & Print" on their dashboard.
+    # 1. Query SMB UPI Gateway API first if configured
+    shop_smb_key = (shop.get("smbupi_api_key") or "").strip() if shop else ""
+    shop_smb_secret = (shop.get("smbupi_api_secret") or "").strip() if shop else ""
+    active_key = shop_smb_key or os.environ.get("SMB_API_KEY", "").strip()
+    active_secret = shop_smb_secret or os.environ.get("SMB_API_SECRET", "").strip()
+    
+    if active_key and active_secret:
+        try:
+            smb_res = check_smbupi_order_status(api_key=active_key, api_secret=active_secret, order_id=job_id)
+            if smb_res.get("success") or smb_res.get("status") == "success":
+                updated = database.update_job_status(job_id, {
+                    "payment_status": "paid",
+                    "print_status": "printing",
+                    "payment_method": smb_res.get("payment_method", "UPI"),
+                    "payment_utr": smb_res.get("utr", "")
+                })
+                background_tasks.add_task(trigger_print_execution, job_id)
+                print(f"[CLAIM AUTO-VERIFY] Order {job_id} confirmed paid via SMB UPI! Auto-print triggered.")
+                return {"success": True, "job": updated, "auto_printed": True, "verified": True}
+        except Exception as e:
+            print(f"[CLAIM SMB CHECK ERROR] {e}")
+            
+    # 2. Query Paytm if configured
+    if shop and shop.get("paytm_enabled") and shop.get("paytm_mid") and shop.get("paytm_merchant_key"):
+        try:
+            ptm_res = check_paytm_order_status(mid=shop["paytm_mid"], merchant_key=shop["paytm_merchant_key"], order_id=job_id)
+            if ptm_res.get("success") and ptm_res.get("status") == "TXN_SUCCESS":
+                updated = database.update_job_status(job_id, {
+                    "payment_status": "paid",
+                    "print_status": "printing",
+                    "paytm_txn_id": ptm_res.get("txn_id", "")
+                })
+                background_tasks.add_task(trigger_print_execution, job_id)
+                return {"success": True, "job": updated, "auto_printed": True, "verified": True}
+        except Exception:
+            pass
+
+    # 3. Fallback: Mark as claimed, waiting for manual confirmation by merchant
     updated = database.update_job_status(job_id, {
         "payment_status": "claimed",
         "print_status": "waiting_merchant"
     })
-    return {"success": True, "job": updated, "auto_printed": False}
+    return {"success": True, "job": updated, "auto_printed": False, "verified": False}
 
 # ==================== MERCHANT ORDER ACTIONS ====================
 

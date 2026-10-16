@@ -2,33 +2,29 @@
 SMART PRINT CLOUD & DESKTOP - GITHUB UPLOAD INSTRUCTIONS
 ========================================================
 
-✅ SAARE UPDATES AUR BUG FIXES COMPLETE HO GAYE HAIN:
+✅ SAARE NAYE FEATURES AUR PAYMENT/PRINT BUG FIXES COMPLETE:
 --------------------------------------------------------
-1. Dual Payment Gateway (SMB UPI + Binance Pay USDT):
-   - Customer Checkout (public/customer.html): Dono options active (UPI & Binance Pay).
-   - Super Admin & Merchant Subscription Modal (public/dashboard.html): Sirf UPI (INR) chalu hai, Binance Pay disable kiya gaya hai.
-   - Live Credentials & HMAC-SHA256 Webhook Verification backend me fully integrated.
+1. Multi-File Print Order (1 Se Jyada Files Print Karne Ka Option):
+   - Step 1 (Upload): Customer ab ek se jyada files (PDF, Images) ek saath select/upload kar sakta hai.
+   - Step 2 (Settings): Upload hui sabhi files list me dikhti hain unke page count ke sath.
+   - "➕ Add More Files" button diya gaya hai jisse customer aur files bhi add kar sakta hai.
+   - Backend automatically sabhi files ko ek PDF me merge karke total pages aur pricing calculate karta hai.
 
-2. Auto-Print Failure (Bifal) Root Cause Fix:
-   - System real printer 'EPSON L3210 Series' set ho gaya hai (pehle galat default 'EPSON L3150' saved tha).
-   - Backend me auto-repair add kar diya gaya hai — jab bhi desktop connector heartbeat bhejta hai, server par printer name automatically real printer se sync ho jata hai.
-   - SumatraPDF silent printing me robust fallback add kar diya gaya hai (PowerShell PrintTo + Default Windows Spooler), taaki print kabhi fail na ho.
+2. Mobile UPI App Na Khulne Ka Problem Solve:
+   - PhonePe, Google Pay, Paytm, aur Direct UPI ke liye direct native links (phonepe://, gpay://, paytmmp://, upi://) set kar diye gaye hain.
+   - Mobile Chrome/Safari popup/navigation blocker ab UPI apps ko block nahi karega.
+   - SMB Gateway portal button ko new tab (target="_blank") me kholne ke liye set kiya gaya hai taaki SmartPrint auto-verify page piche background me chalu rahe.
 
-3. Desktop Agent & Connector (smart_print_app.py / dist/SmartPrintConnect.exe):
-   - Naya compiled SmartPrintConnect.exe tayyar hai.
-   - Connector heartbeat aur real-time cloud sync working.
+3. Automatic Payment Verification & Instant Print:
+   - SMB UPI gateway status ab turant (0s delay, fir har 2.5s me) auto-verify hota hai.
+   - "Payment Done" click karne par backend turant SMB UPI gateway se check karke status 'paid' aur 'printing' karta hai aur silent print trigger karta hai.
 
 --------------------------------------------------------
 KAISE GITHUB PAR UPLOAD KAREIN (STEP-BY-STEP):
 --------------------------------------------------------
-Method A: ZIP File Se (Sabse Asaan Tarika)
------------------------------------------
-- Aapke Downloads folder me 'smartprint_fixed_files.zip' tayyar hai.
-- Ya fir 'SMARTPRINT_GITHUB_UPLOAD' folder ko direct use kar sakte hain.
-
-Method B: GitHub Website Par Upload (Drag & Drop)
-------------------------------------------------
-1. Apne browser me GitHub repository kholein (e.g. SmartPrint repo).
+Method A: GitHub Website Par Upload (Direct Drag & Drop)
+--------------------------------------------------------
+1. Apne browser me GitHub repository kholein:
 2. Root Folder me 'Add file' -> 'Upload files' click karein aur SMARTPRINT_GITHUB_UPLOAD se ye files drag karein:
    - server.py
    - database.py
@@ -42,17 +38,17 @@ Method B: GitHub Website Par Upload (Drag & Drop)
 
 3. 'services' folder kholein (ya create karein):
    - Upload karein:
-     * printer_service.py
      * document_service.py
      * payment_service.py
+     * printer_service.py
      * settings_service.py
      * tunnel_service.py
    -> Click 'Commit changes'.
 
 4. 'public' folder kholein:
    - Upload karein:
-     * dashboard.html
      * customer.html
+     * dashboard.html
      * login.html
      * register.html
      * superadmin.html
@@ -62,24 +58,16 @@ Method B: GitHub Website Par Upload (Drag & Drop)
 
 5. 'public/js' folder kholein:
    - Upload karein:
-     * dashboard.js
      * customer.js
+     * dashboard.js
      * superadmin.js
      * admin.js
      * app.js
    -> Click 'Commit changes'.
 
-6. 'public/css' folder kholein:
-   - Upload karein:
-     * style.css
-     * admin.css
-   -> Click 'Commit changes'.
+Method B: ZIP File Se
+---------------------
+- Downloads folder me 'smartprint_fixed_files.zip' tayyar hai.
 
-7. 'config' folder kholein:
-   - Upload karein:
-     * shop_settings_persistent.json
-     * settings.json
-   -> Click 'Commit changes'.
-
-Render 1-2 minute me automatically build complete karke live website update kar dega!
+Upload hone ke 1-2 minute baad Render par deploy ho jayega aur live system multi-file upload, 1-click mobile UPI aur instant auto-print ke sath chalega!
 ========================================================
