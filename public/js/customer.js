@@ -429,6 +429,19 @@ async function proceedToPayment() {
     const totalAmt = parseFloat(currentJob.total_amount || 0).toFixed(2);
     document.getElementById("payAmountDisplay").textContent = `₹${totalAmt}`;
     
+    // SMB UPI (Universal Gateway)
+    const isSmbUpi = Boolean(currentJob.is_smbupi_auto && (currentJob.smbupi_pay_url || currentJob.smbupi_upi_url));
+    const smbupiBox = document.getElementById("smbupiAutoDetectBox");
+    const btnSmbUpi = document.getElementById("btnSmbUpiPay");
+
+    if (smbupiBox) {
+      smbupiBox.style.display = isSmbUpi ? "block" : "none";
+    }
+    if (btnSmbUpi) {
+      btnSmbUpi.href = currentJob.smbupi_payment_url || currentJob.smbupi_upi_url || "#";
+      btnSmbUpi.target = "_blank";
+    }
+
     // QR image with foolproof fallback
     let qrSrc = currentJob.qr_code || currentJob.qr_code_base64 || data.qr_code || data.qr_code_base64 || "";
     if (!qrSrc && currentJob.upi_uri) {
@@ -440,9 +453,9 @@ async function proceedToPayment() {
       qrImg.style.display = "inline-block";
     }
     
-    // Shop custom standee QR if uploaded
+    // Shop custom standee QR (ONLY display if NOT using auto gateway)
     const standeeImg = currentJob.shop_qr_image || currentShop?.shop_qr_image;
-    if (standeeImg) {
+    if (standeeImg && !isSmbUpi) {
       document.getElementById("shopStandeeImg").src = standeeImg;
       document.getElementById("shopStandeeContainer").style.display = "block";
     } else {
@@ -469,38 +482,20 @@ async function proceedToPayment() {
     const paytmBtn = document.getElementById("quickPaytmLink");
 
     if (directUpiBtn) {
-      directUpiBtn.href = upiUri || (currentJob.smbupi_upi_url || "#");
-      directUpiBtn.onclick = (e) => { triggerPayApp("auto", e); };
+      directUpiBtn.href = upiUri || (currentJob.smbupi_payment_url || currentJob.smbupi_upi_url || "#");
+      directUpiBtn.onclick = null;
     }
     if (phonepeBtn) {
       phonepeBtn.href = rawQuery ? `phonepe://pay?${rawQuery}` : (upiUri || "#");
-      phonepeBtn.onclick = (e) => { triggerPayApp("phonepe", e); };
+      phonepeBtn.onclick = null;
     }
     if (gpayBtn) {
       gpayBtn.href = rawQuery ? `gpay://upi/pay?${rawQuery}` : (upiUri || "#");
-      gpayBtn.onclick = (e) => { triggerPayApp("gpay", e); };
+      gpayBtn.onclick = null;
     }
     if (paytmBtn) {
       paytmBtn.href = rawQuery ? `paytmmp://pay?${rawQuery}` : (upiUri || "#");
-      paytmBtn.onclick = (e) => { triggerPayApp("paytm", e); };
-    }
-
-    // SMB UPI (Universal Dual-Currency Gateway: UPI & Binance Pay)
-    const isSmbUpi = Boolean(currentJob.is_smbupi_auto && (currentJob.smbupi_pay_url || currentJob.smbupi_upi_url));
-    const smbupiBox = document.getElementById("smbupiAutoDetectBox");
-    const btnSmbUpi = document.getElementById("btnSmbUpiPay");
-    const btnSmbBinance = document.getElementById("btnSmbBinancePay");
-
-    if (smbupiBox) {
-      smbupiBox.style.display = isSmbUpi ? "block" : "none";
-    }
-    if (btnSmbUpi) {
-      btnSmbUpi.href = currentJob.smbupi_upi_url || currentJob.smbupi_payment_url || "#";
-      btnSmbUpi.target = "_blank";
-    }
-    if (btnSmbBinance) {
-      btnSmbBinance.href = currentJob.smbupi_binance_url || (currentJob.smbupi_token ? `https://smbupi.com/pay/binance?token=${currentJob.smbupi_token}&order_id=${currentJob.id}` : "#");
-      btnSmbBinance.target = "_blank";
+      paytmBtn.onclick = null;
     }
 
     // PhonePe Standard Checkout
@@ -550,60 +545,41 @@ async function proceedToPayment() {
 }
 
 function triggerPayApp(target, event) {
+  if (event && event.preventDefault) event.preventDefault();
   if (!currentJob) return;
 
   const upiUri = buildUpiIntentUri(currentJob, currentShop);
   const rawQuery = upiUri.includes("?") ? upiUri.split("?")[1] : "";
 
-  if (target === "smbupi_binance") {
-    const binanceUrl = currentJob.smbupi_binance_url || 
-      (currentJob.smbupi_token ? `https://smbupi.com/pay/binance?token=${currentJob.smbupi_token}&order_id=${currentJob.id}` : "");
-    if (binanceUrl) {
-      window.open(binanceUrl, "_blank");
-    }
-    return;
-  }
-
   if (target === "smbupi_upi" || target === "smbupi") {
-    const upiPayUrl = currentJob.smbupi_upi_url || currentJob.smbupi_payment_url;
-    if (upiPayUrl) {
-      window.open(upiPayUrl, "_blank");
-    }
+    const upiPayUrl = currentJob.smbupi_payment_url || currentJob.smbupi_upi_url;
+    if (upiPayUrl) window.open(upiPayUrl, "_blank");
     return;
   }
 
   if (target === "phonepe") {
     const targetUrl = rawQuery ? `phonepe://pay?${rawQuery}` : upiUri;
-    if (targetUrl) {
-      window.location.href = targetUrl;
-      setTimeout(() => { if (upiUri) window.location.href = upiUri; }, 1500);
-    }
+    if (targetUrl) window.location.href = targetUrl;
     return;
   }
 
   if (target === "gpay") {
     const targetUrl = rawQuery ? `gpay://upi/pay?${rawQuery}` : upiUri;
-    if (targetUrl) {
-      window.location.href = targetUrl;
-      setTimeout(() => { if (upiUri) window.location.href = upiUri; }, 1500);
-    }
+    if (targetUrl) window.location.href = targetUrl;
     return;
   }
 
   if (target === "paytm") {
     const targetUrl = rawQuery ? `paytmmp://pay?${rawQuery}` : upiUri;
-    if (targetUrl) {
-      window.location.href = targetUrl;
-      setTimeout(() => { if (upiUri) window.location.href = upiUri; }, 1500);
-    }
+    if (targetUrl) window.location.href = targetUrl;
     return;
   }
 
   // Universal fallback
   if (upiUri) {
     window.location.href = upiUri;
-  } else if (currentJob.smbupi_upi_url || currentJob.smbupi_payment_url) {
-    window.open(currentJob.smbupi_upi_url || currentJob.smbupi_payment_url, "_blank");
+  } else if (currentJob.smbupi_payment_url || currentJob.smbupi_upi_url) {
+    window.open(currentJob.smbupi_payment_url || currentJob.smbupi_upi_url, "_blank");
   } else {
     alert("UPI Payment ଲିଙ୍କ୍ ପ୍ରସ୍ତୁତ ହୋଇପାରିଲା ନାହିଁ। ଦୟାକରି QR କୋଡ୍ ସ୍କାନ୍ କରନ୍ତୁ କିମ୍ବା UPI ID କପି କରନ୍ତୁ।");
   }
@@ -611,6 +587,30 @@ function triggerPayApp(target, event) {
 
 async function resumeJobPaymentStatus(jobId) {
   try {
+    // If returning from SMB Gateway redirect (callback), check verification immediately
+    const urlParams = new URLSearchParams(window.location.search);
+    const hasPaidParam = urlParams.has("smbpaid") || urlParams.has("paid");
+    if (hasPaidParam) {
+      try {
+        const verifyRes = await fetch(`/api/customer/jobs/${jobId}/check-smbupi-status`, {
+          method: "POST"
+        });
+        if (verifyRes.ok) {
+          const verifyData = await verifyRes.json();
+          if (verifyData.status === "success" || verifyData.success || (verifyData.job && verifyData.job.payment_status === "paid")) {
+            currentJob = verifyData.job || currentJob;
+            setStep(4);
+            document.getElementById("waitingTitle").textContent = "⚡ ପେମେଣ୍ଟ୍ ସଫଳ (Verified)!";
+            document.getElementById("waitingDesc").textContent = "SMB UPI ରୁ ପେମେଣ୍ଟ୍ କନଫର୍ମ ହୋଇଛି! ପ୍ରିଣ୍ଟର୍ ରୁ କାଗଜ ବାହାରୁଛି...";
+            startPollingPrintStatus();
+            return;
+          }
+        }
+      } catch (checkErr) {
+        console.warn("Immediate gateway return check:", checkErr);
+      }
+    }
+
     const res = await fetch(`/api/customer/jobs/${jobId}/status`);
     if (!res.ok) return;
     const job = await res.json();

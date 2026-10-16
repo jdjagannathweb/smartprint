@@ -535,16 +535,15 @@ def customer_configure_job(job_id: str, body: CustomerConfigureRequest):
             phonepe_pay_url = phonepe_res.get("redirect_url", "")
 
     # SMB UPI (Universal Dual-Currency Gateway: UPI & Binance Pay)
+    # SMB UPI (Universal Dual-Currency Gateway: UPI & Binance Pay)
     shop_smb_key = (shop.get("smbupi_api_key") or "").strip()
     shop_smb_secret = (shop.get("smbupi_api_secret") or "").strip()
     shop_smb_enabled = bool(int(shop.get("smbupi_enabled", 0)))
 
-    env_smb_key = os.environ.get("SMB_API_KEY", "").strip()
-    env_smb_secret = os.environ.get("SMB_API_SECRET", "").strip()
-
-    active_smb_key = shop_smb_key or (env_smb_key if shop_smb_enabled else "")
-    active_smb_secret = shop_smb_secret or (env_smb_secret if shop_smb_enabled else "")
-    is_smbupi_auto = bool(active_smb_key and active_smb_secret)
+    # Only activate if the shop has explicitly enabled SMB UPI with valid credentials
+    is_smbupi_auto = bool(shop_smb_enabled and shop_smb_key and shop_smb_secret)
+    active_smb_key = shop_smb_key if is_smbupi_auto else ""
+    active_smb_secret = shop_smb_secret if is_smbupi_auto else ""
 
     smbupi_pay_url = ""
     smbupi_upi_url = ""
@@ -580,6 +579,15 @@ def customer_configure_job(job_id: str, body: CustomerConfigureRequest):
                 upi_uri = smb_res["upi_intent"]
         else:
             print(f"[SMBUPI CREATE ORDER ERROR] {smb_res.get('error')}")
+
+    active_upi_id = (shop.get("paytm_vpa") if is_paytm_auto else shop.get("upi_id")) or ""
+    if is_smbupi_auto and smb_res.get("upi_intent"):
+        try:
+            parsed_q = urllib.parse.parse_qs(urllib.parse.urlparse(smb_res["upi_intent"]).query)
+            if parsed_q.get("pa"):
+                active_upi_id = parsed_q["pa"][0]
+        except Exception:
+            pass
     
     updated = database.update_job_status(job_id, {
         "num_pages_to_print": num_pages,
@@ -593,20 +601,22 @@ def customer_configure_job(job_id: str, body: CustomerConfigureRequest):
         "smbupi_payment_url": smbupi_pay_url,
         "smbupi_upi_url": smbupi_upi_url,
         "smbupi_binance_url": smbupi_binance_url,
-        "smbupi_token": smbupi_token
+        "smbupi_token": smbupi_token,
+        "upi_intent": upi_uri
     })
     
     job_payload = {
         **updated,
         "upi_uri": upi_uri,
+        "upi_intent": upi_uri,
         "qr_code": qr_b64,
         "qr_code_base64": qr_b64,
         "shop_qr_image": shop.get("shop_qr_image", ""),
-        "upi_id": (shop.get("paytm_vpa") if is_paytm_auto else shop.get("upi_id")) or "",
+        "upi_id": active_upi_id,
         "is_paytm_auto": is_paytm_auto,
         "is_phonepe_auto": is_phonepe_auto,
         "phonepe_pay_url": phonepe_pay_url,
-        "is_smbupi_auto": bool(smbupi_pay_url or is_smbupi_auto),
+        "is_smbupi_auto": bool(smbupi_pay_url and is_smbupi_auto),
         "smbupi_pay_url": smbupi_pay_url,
         "smbupi_upi_url": smbupi_upi_url,
         "smbupi_binance_url": smbupi_binance_url,
@@ -690,13 +700,8 @@ def customer_check_smbupi_status(job_id: str, background_tasks: BackgroundTasks)
         return {"success": True, "status": "success", "job": job}
     
     shop = database.get_shop_by_id(job["shop_id"])
-    shop_smb_key = (shop.get("smbupi_api_key") or "").strip() if shop else ""
-    shop_smb_secret = (shop.get("smbupi_api_secret") or "").strip() if shop else ""
-    env_smb_key = os.environ.get("SMB_API_KEY", "").strip()
-    env_smb_secret = os.environ.get("SMB_API_SECRET", "").strip()
-
-    active_key = shop_smb_key or env_smb_key
-    active_secret = shop_smb_secret or env_smb_secret
+    active_key = (shop.get("smbupi_api_key") or "").strip() if shop else ""
+    active_secret = (shop.get("smbupi_api_secret") or "").strip() if shop else ""
 
     if not active_key or not active_secret:
         return {"success": False, "status": "not_configured", "message": "SMB Gateway is not configured for this shop"}
@@ -940,10 +945,8 @@ def customer_claim_paid(job_id: str, background_tasks: BackgroundTasks):
     shop = database.get_shop_by_id(job["shop_id"])
     
     # 1. Query SMB UPI Gateway API first if configured
-    shop_smb_key = (shop.get("smbupi_api_key") or "").strip() if shop else ""
-    shop_smb_secret = (shop.get("smbupi_api_secret") or "").strip() if shop else ""
-    active_key = shop_smb_key or os.environ.get("SMB_API_KEY", "").strip()
-    active_secret = shop_smb_secret or os.environ.get("SMB_API_SECRET", "").strip()
+    active_key = (shop.get("smbupi_api_key") or "").strip() if shop else ""
+    active_secret = (shop.get("smbupi_api_secret") or "").strip() if shop else ""
     
     if active_key and active_secret:
         try:

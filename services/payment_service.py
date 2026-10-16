@@ -298,25 +298,27 @@ def create_smbupi_order(
         )
         with urllib.request.urlopen(req, timeout=15) as response:
             res_data = json.loads(response.read().decode("utf-8"))
-            if res_data.get("status") == "success":
-                data = res_data.get("data", {})
-                token = data.get("token", "")
-                payment_url = data.get("payment_url") or (f"https://smbupi.com/pay/{token}" if token else "")
-                upi_url = data.get("upi_url") or payment_url
-                binance_url = data.get("binance_url") or (f"https://smbupi.com/pay/binance?token={token}&order_id={clean_order_id}" if token else "")
+            if res_data.get("status") == "success" or res_data.get("success"):
+                data = res_data.get("data") if isinstance(res_data.get("data"), dict) else {}
+                token = data.get("token") or res_data.get("token", "")
+                payment_url = data.get("payment_url") or data.get("url") or res_data.get("payment_url") or res_data.get("url") or (f"https://smbupi.com/pay/{token}" if token else "")
+                upi_url = data.get("upi_url") or res_data.get("upi_url") or payment_url
+                binance_url = data.get("binance_url") or res_data.get("binance_url") or (f"https://smbupi.com/pay/binance?token={token}&order_id={clean_order_id}" if token else "")
+                upi_intent = data.get("upi_intent") or res_data.get("upi_intent", "")
+                qr_data = data.get("qr_data") or res_data.get("qr_data", "") or upi_intent
                 
                 return {
                     "success": True,
                     "payment_url": payment_url,
                     "upi_url": upi_url,
                     "binance_url": binance_url,
-                    "upi_intent": data.get("upi_intent", ""),
-                    "qr_data": data.get("qr_data", ""),
-                    "order_id": data.get("order_id", clean_order_id),
+                    "upi_intent": upi_intent,
+                    "qr_data": qr_data,
+                    "order_id": data.get("order_id") or res_data.get("order_id") or clean_order_id,
                     "token": token,
-                    "amount": float(data.get("amount") or amount),
-                    "currency": data.get("currency", curr_upper),
-                    "provider": data.get("provider", prov_lower)
+                    "amount": float(data.get("amount") or res_data.get("amount") or amount),
+                    "currency": (data.get("currency") or res_data.get("currency") or curr_upper).upper(),
+                    "provider": data.get("provider") or res_data.get("provider") or prov_lower
                 }
             return {
                 "success": False,
@@ -372,23 +374,23 @@ def check_smbupi_order_status(api_key: str, api_secret: str, order_id: str) -> d
         )
         with urllib.request.urlopen(req, timeout=12) as response:
             res_data = json.loads(response.read().decode("utf-8"))
-            if res_data.get("status") == "success":
-                data = res_data.get("data", {})
-                raw_status = (data.get("status") or data.get("payment_status") or "").lower()
-                is_paid = bool(res_data.get("is_paid") or raw_status in ["success", "paid", "completed"])
+            if res_data.get("status") == "success" or res_data.get("success"):
+                data = res_data.get("data") if isinstance(res_data.get("data"), dict) else {}
+                raw_status = (data.get("status") or data.get("payment_status") or res_data.get("status") or "").lower()
+                is_paid = bool(res_data.get("is_paid") or data.get("is_paid") or raw_status in ["success", "paid", "completed"])
                 final_status = "success" if is_paid else (raw_status or "pending")
 
                 return {
                     "success": is_paid,
                     "status": final_status,
-                    "order_id": data.get("order_id", clean_order_id),
-                    "utr": data.get("utr", ""),
+                    "order_id": data.get("order_id") or res_data.get("order_id") or clean_order_id,
+                    "utr": data.get("utr") or res_data.get("utr", ""),
                     "payment_method": (data.get("payment_method") or data.get("payment_mode") or "UPI").upper(),
-                    "currency": (data.get("currency") or "INR").upper(),
-                    "provider": data.get("provider", ""),
-                    "amount": float(data.get("amount") or 0.0),
+                    "currency": (data.get("currency") or res_data.get("currency") or "INR").upper(),
+                    "provider": data.get("provider") or res_data.get("provider", ""),
+                    "amount": float(data.get("amount") or res_data.get("amount") or 0.0),
                     "paid_at": data.get("paid_at") or "",
-                    "raw": data
+                    "raw": res_data
                 }
             return {
                 "success": False,
