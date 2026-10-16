@@ -28,6 +28,58 @@ function getSlugFromPath() {
   return "smart-print";
 }
 
+function getStoredJobId() {
+  try {
+    return localStorage.getItem("smartprint_active_job_id") || "";
+  } catch (e) {
+    return "";
+  }
+}
+
+function saveActiveJob(job) {
+  if (job && job.id) {
+    currentJob = job;
+    try {
+      localStorage.setItem("smartprint_active_job_id", job.id);
+      localStorage.setItem("smartprint_active_job", JSON.stringify(job));
+    } catch (e) {}
+  }
+}
+
+function clearStoredJob() {
+  try {
+    localStorage.removeItem("smartprint_active_job_id");
+    localStorage.removeItem("smartprint_active_job");
+  } catch (e) {}
+}
+
+async function parseJsonResponse(res) {
+  let text = "";
+  try {
+    text = await res.text();
+  } catch (e) {
+    text = "";
+  }
+  let data = {};
+  try {
+    data = JSON.parse(text);
+  } catch (e) {
+    data = {};
+  }
+  if (!res.ok) {
+    if (res.status === 404) {
+      const err = new Error(data.detail || "ଅର୍ଡର ମିଳିଲା ନାହିଁ କିମ୍ବା ସମୟ ସମାପ୍ତ ହୋଇଛି (Order not found / expired).");
+      err.status = 404;
+      throw err;
+    }
+    const msg = data.detail || data.error || data.message || `ସର୍ଭର ସାମୟିକ ବ୍ୟସ୍ତ ଅଛି (${res.status}). ଦୟାକରି କିଛି ସେକେଣ୍ଡ୍ ପରେ ପୁଣି ଚେଷ୍ଟା କରନ୍ତୁ।`;
+    const err = new Error(msg);
+    err.status = res.status;
+    throw err;
+  }
+  return data;
+}
+
 async function initShop() {
   const slug = getSlugFromPath();
   try {
@@ -36,7 +88,7 @@ async function initShop() {
       showInactiveShop("ଏହି ଦୋକାନ ମିଳିଲା ନାହିଁ। ଦୟାକରି ଲିଙ୍କ୍ ଯାଞ୍ଚ କରନ୍ତୁ।");
       return;
     }
-    const data = await res.json();
+    const data = await parseJsonResponse(res);
     currentShop = data;
 
     if (!data.is_active || !data.subscription_valid) {
@@ -63,9 +115,9 @@ async function initShop() {
       document.getElementById("shopStandeeContainer").style.display = "block";
     }
 
-    // Check if customer returning from payment gateway with ?job=JOB-XXXX
+    // Check if customer returning from payment gateway or resuming session
     const urlParams = new URLSearchParams(window.location.search);
-    const returnJobId = urlParams.get("job");
+    const returnJobId = urlParams.get("job") || getStoredJobId();
     if (returnJobId) {
       await resumeJobPaymentStatus(returnJobId);
     }
@@ -176,13 +228,11 @@ async function handleFilesSelected(files) {
       method: "POST",
       body: formData
     });
-    const data = await res.json();
-    if (!res.ok) {
-      throw new Error(data.detail || "ଫାଇଲ୍ ଅପଲୋଡ୍ ବିଫଳ ହେଲା!");
-    }
+    const data = await parseJsonResponse(res);
 
     currentJob = data.job || data;
     if (!currentJob) throw new Error("Job data not found in response");
+    saveActiveJob(currentJob);
 
     // Transition to Step 2
     document.getElementById("cfgFileName").textContent = currentJob.original_name || "Document";
@@ -235,10 +285,7 @@ async function handleAddMoreFiles(files) {
       method: "POST",
       body: formData
     });
-    const data = await res.json();
-    if (!res.ok) {
-      throw new Error(data.detail || "ଆଉ ଏକ ଫାଇଲ୍ ଯୋଡ଼ିବା ବିଫଳ ହେଲା!");
-    }
+    const data = await parseJsonResponse(res);
 
     currentJob = Object.assign({}, currentJob, data.job || {}, data);
     document.getElementById("cfgFileName").textContent = currentJob.original_name || "Documents";
@@ -419,11 +466,17 @@ async function proceedToPayment() {
         page_range: rangeStr || "all"
       })
     });
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.detail || "Error configuring job");
+    const data = await parseJsonResponse(res);
 
     // Robust merge: ensure all URLs, flags, and QR codes from data and data.job are preserved!
     currentJob = Object.assign({}, currentJob, data.job || {}, data);
+    saveActiveJob(currentJob);
+
+    try {
+      const u = new URL(window.location.href);
+      u.searchParams.set("job", currentJob.id);
+      window.history.replaceState({}, "", u.toString());
+    } catch (e) {}
 
     // Show Step 3
     const totalAmt = parseFloat(currentJob.total_amount || 0).toFixed(2);
@@ -596,7 +649,7 @@ async function resumeJobPaymentStatus(jobId) {
           method: "POST"
         });
         if (verifyRes.ok) {
-          const verifyData = await verifyRes.json();
+          const verifyData = await parseJsonResponse(verifyRes);
           if (verifyData.status === "success" || verifyData.success || (verifyData.job && verifyData.job.payment_status === "paid")) {
             currentJob = verifyData.job || currentJob;
             setStep(4);
@@ -612,9 +665,16 @@ async function resumeJobPaymentStatus(jobId) {
     }
 
     const res = await fetch(`/api/customer/jobs/${jobId}/status`);
-    if (!res.ok) return;
-    const job = await res.json();
+    if (!res.ok) {
+      if (res.status === 404) {
+        clearStoredJob();
+        resetFlow();
+      }
+      return;
+    }
+    const job = await parseJsonResponse(res);
     currentJob = job;
+    saveActiveJob(currentJob);
 
     if (job.payment_status === "paid" || job.print_status === "printed" || job.print_status === "printing") {
       setStep(4);
@@ -652,7 +712,7 @@ function startUnifiedStatusPolling(jobId) {
     try {
       const res = await fetch(`/api/customer/jobs/${jobId}/status`);
       if (!res.ok) return;
-      const job = await res.json();
+      const job = await parseJsonResponse(res);
       if (job.payment_status === "paid" || job.print_status === "printing" || job.print_status === "printed") {
         clearInterval(unifiedStatusPollInterval);
         unifiedStatusPollInterval = null;
@@ -688,7 +748,7 @@ function startSmbUpiAutoVerification(jobId) {
       });
       if (!res.ok) return;
 
-      const data = await res.json();
+      const data = await parseJsonResponse(res);
       if (data.status === "success" || data.success || (data.job && data.job.payment_status === "paid")) {
         clearInterval(smbupiPollInterval);
         smbupiPollInterval = null;
@@ -729,7 +789,7 @@ function startPhonePeAutoVerification(jobId) {
       });
       if (!res.ok) return;
 
-      const data = await res.json();
+      const data = await parseJsonResponse(res);
       if (data.status === "COMPLETED" || (data.job && data.job.payment_status === "paid")) {
         clearInterval(phonepePollInterval);
         phonepePollInterval = null;
@@ -768,7 +828,7 @@ function startPaytmAutoVerification(jobId) {
       });
       if (!res.ok) return;
 
-      const data = await res.json();
+      const data = await parseJsonResponse(res);
       if (data.status === "TXN_SUCCESS" || (data.job && data.job.payment_status === "paid")) {
         clearInterval(paytmPollInterval);
         paytmPollInterval = null;
@@ -802,7 +862,18 @@ function copyUpiId() {
 }
 
 async function claimPaymentDone() {
-  if (!currentJob) return;
+  if (!currentJob) {
+    const storedId = getStoredJobId();
+    if (storedId) {
+      currentJob = { id: storedId };
+    }
+  }
+
+  if (!currentJob || !currentJob.id) {
+    alert("⚠️ କୌଣସି ସକ୍ରିୟ ପ୍ରିଣ୍ଟ୍ ଅର୍ଡର ମିଳିଲା ନାହିଁ। ଦୟାକରି ଫାଇଲ୍ ପୁଣି ଥରେ ଅପଲୋଡ୍ କରନ୍ତୁ।");
+    resetFlow();
+    return;
+  }
 
   const btn = document.getElementById("btnClaimPaid");
   btn.disabled = true;
@@ -812,12 +883,12 @@ async function claimPaymentDone() {
     const res = await fetch(`/api/customer/jobs/${currentJob.id}/pay-claimed`, {
       method: "POST"
     });
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.detail || "Claim failed");
+    const data = await parseJsonResponse(res);
 
     // If backend auto-verified via SMB UPI or Paytm:
     if (data.verified || data.auto_printed || (data.job && data.job.payment_status === "paid")) {
       currentJob = data.job || currentJob;
+      saveActiveJob(currentJob);
       setStep(4);
       document.getElementById("waitingTitle").textContent = "⚡ ପେମେଣ୍ଟ୍ ସଫଳ (Verified)!";
       document.getElementById("waitingDesc").textContent = "ପେମେଣ୍ଟ୍ କନଫର୍ମ ହୋଇଛି! ପ୍ରିଣ୍ଟର୍ ରୁ କାଗଜ ବାହାରୁଛି...";
@@ -831,6 +902,11 @@ async function claimPaymentDone() {
     document.getElementById("waitingDesc").textContent = "ଆପଣଙ୍କ ପେମେଣ୍ଟ୍ ସୂଚନା ଦୋକାନୀଙ୍କ ଡ୍ୟାସବୋର୍ଡକୁ ପଠାଗଲା। କନଫର୍ମ ହେବା ମାତ୍ରେ କାଗଜ ପ୍ରିଣ୍ଟ୍ ବାହାରିବ।";
     startPollingPrintStatus();
   } catch (err) {
+    if (err.status === 404 || String(err.message).includes("expired") || String(err.message).includes("not found")) {
+      alert("⚠️ ଅର୍ଡର ସମୟ ସମାପ୍ତ ହୋଇଯାଇଛି (Session Expired)। ଦୟାକରି ଫାଇଲ୍ ପୁଣି ଥରେ ଅପଲୋଡ୍ କରନ୍ତୁ।");
+      resetFlow();
+      return;
+    }
     alert("ଭୁଲ୍: " + err.message);
     btn.disabled = false;
     btn.textContent = "✅ ମୁଁ ପେମେଣ୍ଟ୍ କରିସାରିଛି (Payment Done)";
@@ -845,11 +921,13 @@ function startPollingPrintStatus() {
     try {
       const res = await fetch(`/api/customer/jobs/${currentJob.id}/status`);
       if (res.ok) {
-        const job = await res.json();
+        const job = await parseJsonResponse(res);
         currentJob = job;
+        saveActiveJob(currentJob);
         if (job.print_status === "printed") {
           clearInterval(statusPollingInterval);
           statusPollingInterval = null;
+          clearStoredJob();
           document.getElementById("waitingIcon").style.display = "none";
           document.getElementById("waitingTitle").style.display = "none";
           document.getElementById("waitingDesc").style.display = "none";
@@ -873,6 +951,16 @@ function resetFlow() {
   if (unifiedStatusPollInterval) { clearInterval(unifiedStatusPollInterval); unifiedStatusPollInterval = null; }
 
   currentJob = null;
+  clearStoredJob();
+
+  try {
+    const u = new URL(window.location.href);
+    u.searchParams.delete("job");
+    u.searchParams.delete("paid");
+    u.searchParams.delete("smbpaid");
+    window.history.replaceState({}, "", u.toString());
+  } catch (e) {}
+
   const fileInput = document.getElementById("fileInput");
   if (fileInput) fileInput.value = "";
   const fileInputAddMore = document.getElementById("fileInputAddMore");

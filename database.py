@@ -522,12 +522,86 @@ def create_job(job_data):
     return get_job(job_data["id"])
 
 def get_job(job_id):
+    if not job_id:
+        return None
     conn = get_connection()
     c = conn.cursor()
     c.execute("SELECT * FROM jobs WHERE id = ?", (job_id,))
     row = c.fetchone()
+    if row:
+        conn.close()
+        return dict(row)
+    
+    # Fallback 1: check config/jobs.json (prevents data loss after ephemeral container restarts)
+    try:
+        from services.document_service import load_jobs
+        jobs_list = load_jobs()
+        for j in jobs_list:
+            if j.get("id") == job_id:
+                c.execute("""
+                INSERT OR IGNORE INTO jobs (
+                    id, shop_id, original_name, pdf_path, total_pages, num_pages_to_print,
+                    copies, color_mode, print_side, rate_per_page, total_amount, payment_status,
+                    print_status, print_error, created_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """, (
+                    j["id"], j.get("shop_id", "SHP-818D63"), j.get("original_name", "Document.pdf"),
+                    j.get("pdf_path", ""), j.get("total_pages", 1), j.get("num_pages_to_print", 1),
+                    j.get("copies", 1), j.get("color_mode", "bw"), j.get("print_side", "single"),
+                    j.get("rate_per_page", 2.0), j.get("total_amount", 2.0),
+                    j.get("payment_status", "pending"), j.get("print_status", "queued"),
+                    j.get("print_error"), j.get("created_at")
+                ))
+                conn.commit()
+                conn.close()
+                return j
+    except Exception:
+        pass
+
+    # Fallback 2: check if upload file exists on disk
+    try:
+        uploads_dir = Path(__file__).parent / "uploads"
+        pdf_file = uploads_dir / f"{job_id}.pdf"
+        if pdf_file.exists():
+            now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            recovered = {
+                "id": job_id,
+                "shop_id": "SHP-818D63",
+                "original_name": "Document.pdf",
+                "pdf_path": str(pdf_file),
+                "total_pages": 1,
+                "num_pages_to_print": 1,
+                "copies": 1,
+                "color_mode": "bw",
+                "print_side": "single",
+                "rate_per_page": 2.0,
+                "total_amount": 2.0,
+                "payment_status": "pending",
+                "print_status": "queued",
+                "print_error": None,
+                "created_at": now_str
+            }
+            c.execute("""
+            INSERT OR IGNORE INTO jobs (
+                id, shop_id, original_name, pdf_path, total_pages, num_pages_to_print,
+                copies, color_mode, print_side, rate_per_page, total_amount, payment_status,
+                print_status, print_error, created_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """, (
+                recovered["id"], recovered["shop_id"], recovered["original_name"],
+                recovered["pdf_path"], recovered["total_pages"], recovered["num_pages_to_print"],
+                recovered["copies"], recovered["color_mode"], recovered["print_side"],
+                recovered["rate_per_page"], recovered["total_amount"], recovered["payment_status"],
+                recovered["print_status"], recovered["print_error"], recovered["created_at"]
+            ))
+            conn.commit()
+            conn.close()
+            return recovered
+    except Exception:
+        pass
+
     conn.close()
-    return dict(row) if row else None
+    return None
 
 def update_job_status(job_id, updates):
     conn = get_connection()

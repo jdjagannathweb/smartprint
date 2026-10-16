@@ -1,5 +1,220 @@
 [
   {
+    "id": "PJ-514F74A7",
+    "original_name": "test_doc.pdf",
+    "pdf_path": "C:\\Users\\Jagannath\\.gemini\\antigravity\\scratch\\qr-autoprint-shop\\uploads\\PJ-514F74A7.pdf",
+    "total_pages": 1,
+    "selected_pages": "all",
+    "num_pages_to_print": 1,
+    "copies": 1,
+    "color_mode": "bw",
+    "print_side": "single",
+    "rate_per_page": 2.0,
+    "total_amount": 2.0,
+    "payment_status": "pending",
+    "print_status": "queued",
+    "print_error": null,
+    "files_count": 1,
+    "files_info": [
+      {
+        "name": "test_doc.pdf",
+        "pages": 1,
+        "type": "pdf"
+      }
+    ],
+    "created_at": "2026-10-16 16:00:10"
+  },
+  {
+    "id": "PJ-F53C675C",
+    "original_name": "test_doc.pdf",
+    "pdf_path": "C:\\Users\\Jagannath\\.gemini\\antigravity\\scratch\\qr-autoprint-shop\\uploads\\PJ-F53C675C.pdf",
+    "total_pages": 1,
+    "selected_pages": "all",
+    "num_pages_to_print": 1,
+    "copies": 1,
+    "color_mode": "bw",
+    "print_side": "single",
+    "rate_per_page": 2.0,
+    "total_amount": 2.0,
+    "payment_status": "pending",
+    "print_status": "queued",
+    "print_error": null,
+    "files_count": 1,
+    "files_info": [
+      {
+        "name": "test_doc.pdf",
+        "pages": 1,
+        "type": "pdf"
+      }
+    ],
+    "created_at": "2026-10-16 15:35:53"
+  },
+  {
+    "id": "PJ-DE78D7C7",
+    "original_name": "test_doc.pdf",
+    "pdf_path": "C:\\Users\\Jagannath\\.gemini\\antigravity\\scratch\\qr-autoprint-shop\\uploads\\PJ-DE78D7C7.pdf",
+    "total_pages": 1,
+    "selected_pages": "all",
+    "num_pages_to_print": 1,
+    "copies": 1,
+    "color_mode": "bw",
+    "print_side": "single",
+    "rate_per_page": 2.0,
+    "total_amount": 2.0,
+    "payment_status": "pending",
+    "print_status": "queued",
+    "print_error": null,
+    "files_count": 1,
+    "files_info": [
+      {
+        "name": "test_doc.pdf",
+        "pages": 1,
+        "type": "pdf"
+      }
+    ],
+    "created_at": "2026-10-16 15:28:10"
+  },
+  {
+    "id": "PJ-91162FC0",
+    "original_name": "test_doc.pdf",
+    "pdf_path": "C:\\Users\\Jagannath\\.gemini\\antigravity\\scratch\\qr-autoprint-shop\\uploads\\PJ-91162FC0.pdf",
+    "total_pages": 1,
+    "selected_pages": "all",
+    "num_pages_to_print": 1,
+    "copies": 1,
+    "color_mode": "bw",
+    "print_side": "single",
+    "rate_per_page": 2.0,
+    "total_amount": 2.0,
+    "payment_status": "pending",
+    "print_status": "queued",
+    "print_error": null,
+    "files_count": 1,
+    "files_info": [
+      {
+        "name": "test_doc.pdf",
+        "pages": 1,
+        "type": "pdf"
+      }
+    ],
+    "created_at": "2026-10-16 15:25:21"
+  },
+  {
+    "id": "PJ-F83FE7FE",
+    "original_name": "PJ-44DA2C2D.pdf + 1 more (2 files)",
+    "pdf_path": "C:\\Users\\Jagannath\\.gemini\\antigravity\\scratch\\qr-autoprint-shop\\uploads\\PJ-F83FE7FE.pdf",
+    "total_pages": 3,
+    "selected_pages": "all",
+    "num_pages_to_print": 3,
+    "copies": 1,
+    "color_mode": "bw",
+    "print_side": "single",
+    "rate_per_page": 2.0,
+    "total_amount": 6.0,
+    "payment_status": "pending",
+    "print_status": "queued",
+    "print_error": null,
+    "files_count": 2,
+    "files_info": [
+      {
+        "name": "PJ-44DA2C2D.pdf",
+        "pages": 2,
+        "type": "pdf"
+      },
+      {
+        "name": "more_photo.png",
+        "pages": 1,
+        "type": "image"
+      }
+    ],
+    "created_at": "2026-10-16 14:32:26"
+  },
+  {
+    "id": "PJ-44DA2C2D",
+    "original_name": "document1.pdf + 1 more (2 files)",
+    "pdf_path": "C:\\Users\\Jagannath\\.gemini\\antigravity\\scratch\\qr-autoprint-shop\\uploads\\PJ-44DA2C2D.pdf",
+    "total_pages": 2,
+    "selected_pages": "all",
+    "num_pages_to_print": 2,
+    "copies": 1,
+    "color_mode": "bw",
+    "print_side": "single",
+    "rate_per_page": 2.0,
+    "total_amount": 4.0,
+    "payment_status": "pending",
+    "print_status": "queued",
+    "print_error": null,
+    "files_count": 2,
+    "files_info": [
+      {
+        "name": "document1.pdf",
+        "pages": 1,
+        "type": "pdf"
+      },
+      {
+        "name": "photo.png",
+        "pages": 1,
+        "type": "image"
+      }
+    ],
+    "created_at": "2026-10-16 14:32:26"
+  },
+  {
+    "id": "PJ-B5E58432",
+    "original_name": "document1.pdf + 1 more (2 files)",
+    "pdf_path": "C:\\Users\\Jagannath\\.gemini\\antigravity\\scratch\\qr-autoprint-shop\\uploads\\PJ-B5E58432.pdf",
+    "total_pages": 2,
+    "selected_pages": "all",
+    "num_pages_to_print": 2,
+    "copies": 1,
+    "color_mode": "bw",
+    "print_side": "single",
+    "rate_per_page": 2.0,
+    "total_amount": 4.0,
+    "payment_status": "pending",
+    "print_status": "queued",
+    "print_error": null,
+    "files_count": 2,
+    "files_info": [
+      {
+        "name": "document1.pdf",
+        "pages": 1,
+        "type": "pdf"
+      },
+      {
+        "name": "photo.png",
+        "pages": 1,
+        "type": "image"
+      }
+    ],
+    "created_at": "2026-10-16 14:31:05"
+  },
+  {
+    "id": "PJ-F7315F18",
+    "original_name": "test.pdf",
+    "pdf_path": "C:\\Users\\Jagannath\\.gemini\\antigravity\\scratch\\qr-autoprint-shop\\uploads\\PJ-F7315F18.pdf",
+    "total_pages": 1,
+    "selected_pages": "all",
+    "num_pages_to_print": 1,
+    "copies": 1,
+    "color_mode": "bw",
+    "print_side": "single",
+    "rate_per_page": 2.0,
+    "total_amount": 2.0,
+    "payment_status": "pending",
+    "print_status": "queued",
+    "print_error": null,
+    "files_count": 1,
+    "files_info": [
+      {
+        "name": "test.pdf",
+        "pages": 1,
+        "type": "pdf"
+      }
+    ],
+    "created_at": "2026-10-16 14:30:34"
+  },
+  {
     "id": "PJ-204890F3",
     "original_name": "TSRC_21181101002_Certified_2026-27.pdf",
     "pdf_path": "C:\\Users\\Jagannath\\.gemini\\antigravity\\scratch\\qr-autoprint-shop\\uploads\\PJ-204890F3.pdf",
