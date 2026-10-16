@@ -170,7 +170,6 @@ async function handleFilesSelected(files) {
   for (let i = 0; i < files.length; i++) {
     formData.append("files", files[i]);
   }
-  formData.append("file", files[0]);
 
   try {
     const res = await fetch("/api/customer/upload", {

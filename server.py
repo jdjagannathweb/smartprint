@@ -13,6 +13,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 from typing import Optional
 from datetime import datetime
+import inspect
 from pydantic import BaseModel
 
 # Safe .env loading for production & local execution
@@ -328,10 +329,12 @@ async def customer_upload(request: Request, shop_id: str = Form(...)):
     
     files_data = []
     for item in raw_files:
-        if isinstance(item, UploadFile):
-            content = await item.read()
+        if hasattr(item, "read"):
+            read_fn = getattr(item, "read")
+            content = await read_fn() if inspect.iscoroutinefunction(read_fn) else read_fn()
+            fname = getattr(item, "filename", None) or "document.pdf"
             if content:
-                files_data.append((item.filename, content))
+                files_data.append((fname, content))
                 
     if not files_data:
         raise HTTPException(status_code=400, detail="Uploaded file(s) are empty")
@@ -405,10 +408,12 @@ async def customer_add_files(job_id: str, request: Request):
         
     new_files_data = []
     for item in raw_files:
-        if isinstance(item, UploadFile):
-            content = await item.read()
+        if hasattr(item, "read"):
+            read_fn = getattr(item, "read")
+            content = await read_fn() if inspect.iscoroutinefunction(read_fn) else read_fn()
+            fname = getattr(item, "filename", None) or "document.pdf"
             if content:
-                new_files_data.append((item.filename, content))
+                new_files_data.append((fname, content))
                 
     if not new_files_data:
         raise HTTPException(status_code=400, detail="Empty files")
@@ -416,7 +421,7 @@ async def customer_add_files(job_id: str, request: Request):
     orig_path = Path(job["pdf_path"])
     all_files_data = []
     if orig_path.exists():
-        all_files_data.append((job["original_name"], orig_path.read_bytes()))
+        all_files_data.append((f"{orig_path.stem}.pdf", orig_path.read_bytes()))
     all_files_data.extend(new_files_data)
     
     merged = process_uploaded_files(all_files_data)
@@ -433,22 +438,29 @@ async def customer_add_files(job_id: str, request: Request):
     copies = int(job.get("copies", 1))
     new_total = rate * merged["total_pages"] * copies
     
-    total_files = merged.get("files_count", len(all_files_data))
-    first_name = job["original_name"].split(" + ")[0]
+    # Merge existing files_info with newly added files info
+    old_files_info = job.get("files_info") or [{"name": job["original_name"].split(" + ")[0], "pages": job["total_pages"], "type": "pdf"}]
+    new_added_info = merged.get("files_info", [])[1:]
+    combined_files_info = old_files_info + new_added_info
+    
+    total_files = len(combined_files_info)
+    first_name = combined_files_info[0]["name"]
     display_name = f"{first_name} + {total_files-1} more ({total_files} files)" if total_files > 1 else first_name
     
     updated = database.update_job_status(job_id, {
         "original_name": display_name,
         "total_pages": merged["total_pages"],
         "num_pages_to_print": merged["total_pages"],
-        "total_amount": new_total
+        "total_amount": new_total,
+        "files_count": total_files,
+        "files_info": combined_files_info
     })
     
     return {
         **updated,
         "job": updated,
         "files_count": total_files,
-        "files_info": merged.get("files_info", [])
+        "files_info": combined_files_info
     }
 
 class CustomerConfigureRequest(BaseModel):

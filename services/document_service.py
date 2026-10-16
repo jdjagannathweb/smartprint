@@ -61,7 +61,10 @@ def process_uploaded_files(files_data: list[tuple[str, bytes]]) -> dict:
         if not file_bytes:
             continue
         ext = Path(filename).suffix.lower()
-        if ext in [".jpg", ".jpeg", ".png", ".webp", ".bmp"]:
+        is_pdf = ext == ".pdf" or file_bytes.startswith(b"%PDF") or ".pdf" in filename.lower()
+        is_image = ext in [".jpg", ".jpeg", ".png", ".webp", ".bmp"] or file_bytes[:4] in [b'\xff\xd8\xff\xe0', b'\xff\xd8\xff\xe1', b'\x89PNG', b'RIFF']
+
+        if is_image and not is_pdf:
             try:
                 with Image.open(io.BytesIO(file_bytes)) as img:
                     rgb_img = img.convert("RGB")
@@ -76,7 +79,7 @@ def process_uploaded_files(files_data: list[tuple[str, bytes]]) -> dict:
                     files_info.append({"name": filename, "pages": p_count, "type": "image"})
             except Exception as e:
                 raise ValueError(f"Could not process image '{filename}': {e}")
-        elif ext == ".pdf":
+        elif is_pdf:
             try:
                 reader = PdfReader(io.BytesIO(file_bytes))
                 p_count = len(reader.pages)
