@@ -193,39 +193,61 @@ def print_pdf_silent(file_path, printer_name, copies=1, color_mode="bw", print_s
     except Exception:
         return False
 
-def generate_test_pdf(pdf_path: Path, printer_name: str, shop_name: str = "Smart Print"):
-    """Generates an A4 diagnostic test print PDF with zero lag."""
+def generate_test_pdf(pdf_path: Path, printer_name: str, shop_name: str = "Smart Print", shop_id: str = "", token: str = "", mobile: str = ""):
+    """Generates an A4 minimal diagnostic test print PDF showing only Shop ID, Token, and credentials."""
     try:
-        from PIL import Image, ImageDraw
+        from PIL import Image, ImageDraw, ImageFont
         width, height = 1240, 1754
         img = Image.new("RGB", (width, height), color=(255, 255, 255))
         draw = ImageDraw.Draw(img)
         
-        # Header banner
-        draw.rectangle([(50, 50), (width - 50, 200)], fill=(30, 41, 59))
-        draw.text((100, 85), f"TEST PRINT: {shop_name.upper()}", fill=(255, 255, 255))
-        draw.text((100, 135), "SMART PRINT CONNECT - INSTANT PRINT ENGINE READY", fill=(56, 189, 248))
+        def get_font(size, bold=False):
+            font_names = ["arialbd.ttf" if bold else "arial.ttf", "DejaVuSans-Bold.ttf" if bold else "DejaVuSans.ttf", "segoeuib.ttf" if bold else "segoeui.ttf"]
+            for fn in font_names:
+                try:
+                    return ImageFont.truetype(fn, size)
+                except Exception:
+                    pass
+            try:
+                return ImageFont.load_default(size=size)
+            except Exception:
+                return ImageFont.load_default()
+
+        font_title = get_font(38, bold=True)
+        font_label = get_font(28, bold=True)
+        font_val = get_font(28, bold=False)
+        font_note = get_font(22, bold=False)
+
+        draw.text((100, 100), "SMART PRINT - TEST PAGE", fill=(0, 0, 0), font=font_title)
+        draw.line([(100, 160), (width - 100, 160)], fill=(0, 0, 0), width=3)
+
+        y = 210
+        line_h = 60
+        rows = [
+            ("SHOP NAME", shop_name or "Smart Print"),
+            ("SHOP NUMBER / ID", shop_id or "N/A"),
+            ("MOBILE NUMBER", mobile or "N/A"),
+            ("CONNECTOR TOKEN", token or "N/A"),
+            ("PRINTER", printer_name or "System Default"),
+            ("DATE & TIME", time.strftime("%d-%m-%Y  %I:%M:%S %p"))
+        ]
+
+        for label, val in rows:
+            draw.text((100, y), f"{label.ljust(20)} :", fill=(0, 0, 0), font=font_label)
+            draw.text((460, y), str(val), fill=(0, 0, 0), font=font_val)
+            y += line_h
+
+        y += 20
+        draw.line([(100, y), (width - 100, y)], fill=(0, 0, 0), width=3)
+        y += 30
+        draw.text((100, y), "* Enter this Shop Number / ID and Token in SmartPrintConnect App on your PC.", fill=(60, 60, 60), font=font_note)
         
-        # Diagnostics Box
-        draw.rectangle([(50, 240), (width - 50, 520)], outline=(203, 213, 225), width=3)
-        draw.text((80, 270), "PRINTER DIAGNOSTICS & SYSTEM VERIFICATION", fill=(15, 23, 42))
-        draw.text((80, 315), f"Target Printer : {printer_name}", fill=(51, 65, 85))
-        draw.text((80, 360), f"Date & Time    : {time.strftime('%d-%b-%Y, %I:%M:%S %p')}", fill=(51, 65, 85))
-        draw.text((80, 405), "Print Engine   : SumatraPDF High-Speed Silent Spooler (18ms)", fill=(16, 185, 129))
-        draw.text((80, 450), "Spool Latency  : Instant Hardware Dispatch Verified", fill=(37, 99, 235))
-        
-        # Test color bars
-        colors = [(239, 68, 68), (249, 115, 22), (234, 179, 8), (34, 197, 94), (59, 130, 246), (147, 51, 234), (0, 0, 0)]
-        bar_width = (width - 100) // len(colors)
-        for i, col in enumerate(colors):
-            draw.rectangle([(50 + i * bar_width, 560), (50 + (i + 1) * bar_width, 640)], fill=col)
-        
-        draw.text((80, 670), "All printer nozzles, rollers, and drivers are operational!", fill=(100, 116, 139))
+        # Rest of page remains completely BLANK / WHITE
         img.save(pdf_path, "PDF", resolution=150.0)
         return True
     except Exception as e:
         try:
-            content = f"%PDF-1.4\n1 0 obj<</Type/Catalog/Pages 2 0 R>>endobj\n2 0 obj<</Type/Pages/Kids[3 0 R]/Count 1>>endobj\n3 0 obj<</Type/Page/Parent 2 0 R/MediaBox[0 0 595 842]/Contents 4 0 R/Resources<</Font<</F1 5 0 R>>>>>>endobj\n4 0 obj<</Length 120>>stream\nBT /F1 18 Tf 50 750 Td (SMART PRINT TEST PAGE) Tj 0 -30 Td (Printer: {printer_name}) Tj 0 -30 Td (Instant Print Ready) Tj ET\nendstream\nendobj\n5 0 obj<</Type/Font/Subtype/Type1/BaseFont/Helvetica>>endobj\nxref\n0 6\n0000000000 65535 f\n0000000009 00000 n\n0000000058 00000 n\n0000000115 00000 n\n0000000228 00000 n\n0000000398 00000 n\ntrailer<</Size 6/Root 1 0 R>>\nstartxref\n467\n%%EOF\n"
+            content = f"%PDF-1.4\n1 0 obj<</Type/Catalog/Pages 2 0 R>>endobj\n2 0 obj<</Type/Pages/Kids[3 0 R]/Count 1>>endobj\n3 0 obj<</Type/Page/Parent 2 0 R/MediaBox[0 0 595 842]/Contents 4 0 R/Resources<</Font<</F1 5 0 R>>>>>>endobj\n4 0 obj<</Length 160>>stream\nBT /F1 18 Tf 50 750 Td (SMART PRINT TEST PAGE) Tj 0 -30 Td (Shop ID: {shop_id}) Tj 0 -30 Td (Token: {token}) Tj 0 -30 Td (Printer: {printer_name}) Tj ET\nendstream\nendobj\n5 0 obj<</Type/Font/Subtype/Type1/BaseFont/Helvetica>>endobj\nxref\n0 6\n0000000000 65535 f\n0000000009 00000 n\n0000000058 00000 n\n0000000115 00000 n\n0000000228 00000 n\n0000000438 00000 n\ntrailer<</Size 6/Root 1 0 R>>\nstartxref\n507\n%%EOF\n"
             with open(pdf_path, "w", encoding="latin-1") as f:
                 f.write(content)
             return True
@@ -560,7 +582,10 @@ class SmartPrintApp:
 
         test_pdf = TEMP_DIR / "test_page.pdf"
         shop_title = self.shop_info.get("shop_name", "Smart Print")
-        generate_test_pdf(test_pdf, target_printer, shop_title)
+        shop_id = self.cfg.get("shop_id", "")
+        token = self.cfg.get("token", "")
+        mobile = self.shop_info.get("mobile", "")
+        generate_test_pdf(test_pdf, target_printer, shop_title, shop_id=shop_id, token=token, mobile=mobile)
 
         success = print_pdf_silent(
             file_path=test_pdf,

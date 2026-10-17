@@ -545,7 +545,7 @@ def get_job(job_id):
                     print_status, print_error, created_at
                 ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """, (
-                    j["id"], j.get("shop_id", "SHP-818D63"), j.get("original_name", "Document.pdf"),
+                    j["id"], j.get("shop_id", ""), j.get("original_name", "Document.pdf"),
                     j.get("pdf_path", ""), j.get("total_pages", 1), j.get("num_pages_to_print", 1),
                     j.get("copies", 1), j.get("color_mode", "bw"), j.get("print_side", "single"),
                     j.get("rate_per_page", 2.0), j.get("total_amount", 2.0),
@@ -566,7 +566,7 @@ def get_job(job_id):
             now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
             recovered = {
                 "id": job_id,
-                "shop_id": "SHP-818D63",
+                "shop_id": "",
                 "original_name": "Document.pdf",
                 "pdf_path": str(pdf_file),
                 "total_pages": 1,

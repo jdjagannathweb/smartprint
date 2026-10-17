@@ -105,8 +105,8 @@ def print_pdf(file_path, printer_name=None, copies=1, color_mode="bw", print_sid
     except Exception as e:
         return {"success": False, "error": str(e)}
 
-def generate_test_page_pdf(printer_name: str = "System Default", shop_name: str = "Smart Print", output_path: str = None) -> str:
-    """Generates an A4 test print PDF."""
+def generate_test_page_pdf(printer_name: str = "System Default", shop_name: str = "Smart Print", output_path: str = None, shop_id: str = "", connector_token: str = "", mobile: str = "") -> str:
+    """Generates an A4 minimal test print PDF showing only Shop ID, Token, and credentials."""
     if output_path:
         pdf_path = Path(output_path).resolve()
         pdf_path.parent.mkdir(parents=True, exist_ok=True)
@@ -120,27 +120,54 @@ def generate_test_page_pdf(printer_name: str = "System Default", shop_name: str 
     img = Image.new("RGB", (width, height), color=(255, 255, 255))
     draw = ImageDraw.Draw(img)
     
-    # Draw header banner
-    draw.rectangle([(50, 50), (width - 50, 200)], fill=(30, 41, 59))
-    draw.text((100, 90), f"TEST PRINT: {shop_name.upper()}", fill=(255, 255, 255))
-    draw.text((100, 140), "AUTO-PRINT & UPI PAYMENT SYSTEM READY", fill=(56, 189, 248))
+    # Try high quality fonts, fallback gracefully
+    def get_font(size, bold=False):
+        font_names = ["arialbd.ttf" if bold else "arial.ttf", "DejaVuSans-Bold.ttf" if bold else "DejaVuSans.ttf", "segoeuib.ttf" if bold else "segoeui.ttf"]
+        for fn in font_names:
+            try:
+                return ImageFont.truetype(fn, size)
+            except Exception:
+                pass
+        try:
+            return ImageFont.load_default(size=size)
+        except Exception:
+            return ImageFont.load_default()
+
+    font_title = get_font(38, bold=True)
+    font_label = get_font(28, bold=True)
+    font_val = get_font(28, bold=False)
+    font_note = get_font(22, bold=False)
+
+    # Top border / title
+    draw.text((100, 100), "SMART PRINT - TEST PAGE", fill=(0, 0, 0), font=font_title)
+    draw.line([(100, 160), (width - 100, 160)], fill=(0, 0, 0), width=3)
+
+    # Main Details Box
+    y = 210
+    line_h = 60
+
+    rows = [
+        ("SHOP NAME", shop_name or "Smart Print"),
+        ("SHOP NUMBER / ID", shop_id or "N/A"),
+        ("MOBILE NUMBER", mobile or "N/A"),
+        ("CONNECTOR TOKEN", connector_token or "N/A"),
+        ("PRINTER", printer_name or "System Default"),
+        ("DATE & TIME", datetime.now().strftime("%d-%m-%Y  %I:%M:%S %p"))
+    ]
+
+    for label, val in rows:
+        draw.text((100, y), f"{label.ljust(20)} :", fill=(0, 0, 0), font=font_label)
+        draw.text((460, y), str(val), fill=(0, 0, 0), font=font_val)
+        y += line_h
+
+    # Bottom border line
+    y += 20
+    draw.line([(100, y), (width - 100, y)], fill=(0, 0, 0), width=3)
+
+    y += 30
+    draw.text((100, y), "* Enter this Shop Number / ID and Token in SmartPrintConnect App on your PC.", fill=(60, 60, 60), font=font_note)
     
-    # Draw printer details box
-    draw.rectangle([(50, 240), (width - 50, 500)], outline=(203, 213, 225), width=3)
-    draw.text((80, 270), "PRINTER DIAGNOSTICS & VERIFICATION", fill=(15, 23, 42))
-    draw.text((80, 320), f"Target Printer : {printer_name or 'System Default'}", fill=(51, 65, 85))
-    draw.text((80, 370), f"Generated On   : {datetime.now().strftime('%d %B %Y, %I:%M:%S %p')}", fill=(51, 65, 85))
-    draw.text((80, 420), "Print Engine   : SumatraPDF Silent Windows Dispatcher", fill=(16, 185, 129))
-    
-    # Draw test color bars
-    colors = [(239, 68, 68), (249, 115, 22), (234, 179, 8), (34, 197, 94), (59, 130, 246), (147, 51, 234), (0, 0, 0)]
-    bar_width = (width - 100) // len(colors)
-    for i, col in enumerate(colors):
-        x1 = 50 + (i * bar_width)
-        x2 = x1 + bar_width
-        draw.rectangle([(x1, 550), (x2, 630)], fill=col)
-    
-    draw.text((80, 660), "All printer nozzles and drivers are operational!", fill=(100, 116, 139))
-    
+    # The rest of the page (from y=650 down to height=1754) remains 100% BLANK / WHITE.
     img.save(pdf_path, "PDF", resolution=150.0)
     return str(pdf_path)
+

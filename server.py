@@ -1273,37 +1273,48 @@ class TestPrintRequest(BaseModel):
 @app.post("/api/test-print")
 def run_test_print(body: TestPrintRequest):
     try:
-        shop = database.get_shop_by_id(body.shop_id) if body.shop_id else None
-        shop_name = shop["shop_name"] if shop else "Smart Print"
-        target_printer = body.printer_name or (shop.get("selected_printer") if shop else "")
+        if not body.shop_id:
+            raise HTTPException(status_code=400, detail="Shop ID is required for test print")
+            
+        shop = database.get_shop_by_id(body.shop_id)
+        if not shop:
+            raise HTTPException(status_code=404, detail="Shop not found")
+
+        shop_name = shop.get("shop_name", "Smart Print")
+        target_printer = body.printer_name or shop.get("selected_printer") or "System Default"
         job_id = "JOB-TEST-" + uuid.uuid4().hex[:6].upper()
         test_pdf = UPLOADS_DIR / f"{job_id}.pdf"
-        generate_test_page_pdf(printer_name=target_printer or "System Default", shop_name=shop_name, output_path=str(test_pdf))
         
-        # If running on Cloud (Render / Linux / no local Windows printer attached to server),
-        # queue an approved test print job so Windows Desktop Agent prints it automatically!
-        is_windows = (os.name == "nt")
-        if (not is_windows or not SUMATRA_PATH.exists()) and body.shop_id:
-            database.create_job({
-                "id": job_id,
-                "shop_id": body.shop_id,
-                "original_name": "Test_Print_Page.pdf",
-                "pdf_path": str(test_pdf),
-                "total_pages": 1,
-                "num_pages_to_print": 1,
-                "copies": 1,
-                "color_mode": "bw",
-                "print_side": "single",
-                "rate_per_page": 0.0,
-                "total_amount": 0.0,
-                "payment_status": "paid",
-                "print_status": "printing",
-                "created_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-            })
-            return {"success": True, "method": "cloud_connector", "message": "Test print queued for Windows Desktop Agent"}
+        generate_test_page_pdf(
+            printer_name=target_printer,
+            shop_name=shop_name,
+            output_path=str(test_pdf),
+            shop_id=shop.get("shop_id", ""),
+            connector_token=shop.get("connector_token", ""),
+            mobile=shop.get("mobile", "")
+        )
         
-        res = print_pdf(str(test_pdf), printer_name=body.printer_name or None, copies=1, color_mode="bw")
-        return res
+        # ALWAYS queue as a cloud connector print job specifically for this shop!
+        # This guarantees that Shop A will NEVER print on Shop B's printer.
+        database.create_job({
+            "id": job_id,
+            "shop_id": body.shop_id,
+            "original_name": f"Test_Print_{shop['shop_id']}.pdf",
+            "pdf_path": str(test_pdf),
+            "total_pages": 1,
+            "num_pages_to_print": 1,
+            "copies": 1,
+            "color_mode": "bw",
+            "print_side": "single",
+            "rate_per_page": 0.0,
+            "total_amount": 0.0,
+            "payment_status": "paid",
+            "print_status": "printing",
+            "created_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        })
+        return {"success": True, "method": "cloud_connector", "message": f"Test print queued for Shop {shop['shop_id']}"}
+    except HTTPException:
+        raise
     except Exception as e:
         return {"success": False, "error": str(e)}
 
