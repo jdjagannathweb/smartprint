@@ -1,10 +1,29 @@
 import sqlite3
 import uuid
 import json
+import hashlib
 from datetime import datetime, timedelta
 from pathlib import Path
 
 DB_FILE = Path(__file__).parent / "database.db"
+
+def hash_password(pwd: str) -> str:
+    """Hashes password with SHA-256 for secure storage."""
+    if not pwd:
+        return ""
+    # If already a 64-char hex SHA-256 string, don't double hash
+    if len(pwd) == 64 and all(c in "0123456789abcdefABCDEF" for c in pwd):
+        return pwd.lower()
+    return hashlib.sha256(pwd.strip().encode("utf-8")).hexdigest()
+
+def verify_password(stored: str, provided: str) -> bool:
+    """Verifies provided plaintext password against stored hash or legacy plaintext."""
+    if not stored or not provided:
+        return False
+    # Backward compatibility with existing plaintext database records
+    if stored == provided or stored == provided.strip():
+        return True
+    return stored.lower() == hash_password(provided).lower()
 
 def get_connection():
     conn = sqlite3.connect(str(DB_FILE))
@@ -394,7 +413,7 @@ def register_shop(shop_name, owner_name, mobile, password, slug=None, upi_id="")
             subscription_plan, subscription_expires_at, is_active, created_at
         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 2.0, 10.0, 3.0, 15.0, ?, 'plan1_free', ?, 1, ?)
         """, (
-            shop_id, slug, shop_name, owner_name, mobile, password,
+            shop_id, slug, shop_name, owner_name, mobile, hash_password(password),
             upi_id, owner_name, connector_token,
             expires_at.strftime("%Y-%m-%d %H:%M:%S"),
             now.strftime("%Y-%m-%d %H:%M:%S")
@@ -444,7 +463,7 @@ def update_shop_settings(shop_id, updates):
     for k in allowed:
         if k in updates:
             fields.append(f"{k} = ?")
-            values.append(updates[k])
+            values.append(hash_password(updates[k]) if k == "password" else updates[k])
     if fields:
         values.append(shop_id)
         c.execute(f"UPDATE shops SET {', '.join(fields)} WHERE shop_id = ?", values)
@@ -797,7 +816,7 @@ def superadmin_update_shop(shop_id, data):
         params.append(new_slug)
     if "password" in data and data["password"]:
         fields.append("password = ?")
-        params.append(str(data["password"]).strip())
+        params.append(hash_password(str(data["password"]).strip()))
     if "upi_id" in data:
         fields.append("upi_id = ?")
         params.append(str(data["upi_id"] or "").strip())
@@ -832,7 +851,7 @@ def superadmin_update_shop(shop_id, data):
 def superadmin_reset_password(shop_id, new_password):
     conn = get_connection()
     c = conn.cursor()
-    c.execute("UPDATE shops SET password = ? WHERE shop_id = ?", (new_password.strip(), shop_id))
+    c.execute("UPDATE shops SET password = ? WHERE shop_id = ?", (hash_password(new_password.strip()), shop_id))
     conn.commit()
     conn.close()
     return True

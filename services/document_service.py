@@ -177,6 +177,24 @@ def prepare_final_print_pdf(job_id: str) -> str:
         fallback_uploads = UPLOADS_DIR / original_pdf.name
         if fallback_uploads.exists():
             original_pdf = fallback_uploads
+        elif job_id.startswith("JOB-TEST-"):
+            try:
+                from services.printer_service import generate_test_page_pdf
+                shop = database.get_shop_by_id(job.get("shop_id"))
+                shop_name = shop.get("shop_name", "Smart Print") if shop else "Smart Print"
+                token = shop.get("connector_token", "") if shop else ""
+                mobile = shop.get("mobile", "") if shop else ""
+                target_printer = shop.get("selected_printer", "Default Printer") if shop else "Default Printer"
+                generate_test_page_pdf(
+                    printer_name=target_printer,
+                    shop_name=shop_name,
+                    output_path=str(original_pdf),
+                    shop_id=job.get("shop_id", ""),
+                    connector_token=token,
+                    mobile=mobile
+                )
+            except Exception as e:
+                raise FileNotFoundError(f"Test print regeneration failed: {e}")
         else:
             raise FileNotFoundError(f"PDF file not found: {original_pdf}")
     
@@ -209,17 +227,32 @@ def delete_job_files(job_id: str):
         except Exception:
             pass
 
-def cleanup_old_uploads(max_age_minutes: int = 15):
+def cleanup_old_uploads(max_age_minutes: int = 240):
     """
-    Auto-purges uploaded customer files older than max_age_minutes.
-    Guarantees 100% customer data privacy (Aadhaar, PAN, personal docs are not kept).
+    Auto-purges uploaded customer files.
+    - If job is already printed or cancelled: deletes after 15 minutes for customer privacy.
+    - If job is still pending, waiting for merchant, or in print queue: retains file for 4 hours (240 minutes)
+      so delayed payments or merchant approvals never suffer from missing file errors!
     """
     import time
     now = time.time()
+    try:
+        import database
+    except ImportError:
+        database = None
+
     for p in UPLOADS_DIR.iterdir():
         if p.is_file():
             try:
-                if (now - p.stat().st_mtime) > (max_age_minutes * 60):
+                age_minutes = (now - p.stat().st_mtime) / 60
+                job_id = p.stem.replace("_trimmed", "")
+                job = database.get_job(job_id) if database else None
+                
+                if job and job.get("print_status") in ["printed", "cancelled"]:
+                    if age_minutes > 15:
+                        p.unlink(missing_ok=True)
+                elif age_minutes > max_age_minutes:
                     p.unlink(missing_ok=True)
             except Exception:
                 pass
+

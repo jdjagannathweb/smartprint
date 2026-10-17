@@ -225,6 +225,7 @@
         // Store shop session
         localStorage.setItem("current_shop_id", data.shop.shop_id);
         localStorage.setItem("current_shop_name", data.shop.shop_name);
+        localStorage.setItem("shop_auth_token", data.token || data.shop.connector_token || "");
 
         btn.textContent = "✅ ସଫଳ ହେଲା! ଡ୍ୟାସବୋର୍ଡ ଖୋଲୁଛି...";
         setTimeout(() => {

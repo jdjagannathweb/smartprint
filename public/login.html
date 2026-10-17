@@ -64,19 +64,10 @@
 
   <div class="login-container">
     <div class="login-card">
-      <div style="display: flex; background: #f1f5f9; border-radius: 12px; padding: 4px; margin-bottom: 24px;">
-        <button type="button" id="tabBtnShop" onclick="setLoginType('shop')" style="flex: 1; padding: 10px; border: none; border-radius: 8px; font-weight: 700; font-size: 0.95rem; cursor: pointer; background: #2563eb; color: #fff; transition: all 0.2s;">
-          🏪 ଦୋକାନୀ ଲଗ୍ଇନ୍
-        </button>
-        <button type="button" id="tabBtnSuper" onclick="setLoginType('superadmin')" style="flex: 1; padding: 10px; border: none; border-radius: 8px; font-weight: 700; font-size: 0.95rem; cursor: pointer; background: transparent; color: #64748b; transition: all 0.2s;">
-          👑 ସୁପର୍ ଆଡମିନ୍
-        </button>
-      </div>
-
       <div style="text-align: center; margin-bottom: 24px;">
-        <span id="loginIcon" style="font-size: 2.5rem;">🏪</span>
-        <h2 id="loginTitle" style="font-size: 1.5rem; color: #0f172a; margin: 8px 0 4px; font-weight: 800;">ଦୋକାନୀ ଲଗ୍ଇନ୍</h2>
-        <p id="loginSubtitle" style="color: #64748b; font-size: 0.88rem;">ଆପଣଙ୍କ ଦୋକାନ କଣ୍ଟ୍ରୋଲ୍ ପ୍ୟାନେଲ୍ କୁ ପ୍ରବେଶ କରନ୍ତୁ</p>
+        <span style="font-size: 2.5rem;">🏪</span>
+        <h2 style="font-size: 1.5rem; color: #0f172a; margin: 8px 0 4px; font-weight: 800;">ଦୋକାନୀ ଲଗ୍ଇନ୍</h2>
+        <p style="color: #64748b; font-size: 0.88rem;">ଆପଣଙ୍କ ଦୋକାନ କଣ୍ଟ୍ରୋଲ୍ ପ୍ୟାନେଲ୍ କୁ ପ୍ରବେଶ କରନ୍ତୁ</p>
       </div>
 
       <div id="errorAlert" style="display: none; background: #fef2f2; border-left: 4px solid #ef4444; color: #991b1b; padding: 12px 16px; border-radius: 8px; margin-bottom: 20px; font-size: 0.9rem;"></div>
@@ -98,18 +89,6 @@
         </button>
       </form>
 
-      <!-- SUPER ADMIN FORM -->
-      <form id="loginFormSuper" onsubmit="handleSuperLogin(event)" style="display: none;">
-        <div class="form-group">
-          <label for="superPin">🔑 ସୁପର୍ ଆଡମିନ୍ Master PIN</label>
-          <input type="password" id="superPin" placeholder="Master PIN ଦିଅନ୍ତୁ (Default: 1234)" maxlength="8" required>
-        </div>
-
-        <button type="submit" id="btnSubmitSuper" class="btn btn-primary" style="width: 100%; padding: 13px; font-size: 1.05rem; font-weight: 700; margin-top: 8px; background: #0f172a; border-color: #0f172a;">
-          👑 ସୁପର୍ ଆଡମିନ୍ ପ୍ରବେଶ (Master Login)
-        </button>
-      </form>
-
       <div id="registerFooter" style="text-align: center; margin-top: 24px; font-size: 0.92rem; color: #64748b;">
         ନୂଆ ଦୋକାନୀ ଅଟନ୍ତି କି? <br>
         <a href="/register" style="color: #059669; font-weight: 700; text-decoration: none; display: inline-block; margin-top: 6px;">
@@ -120,46 +99,6 @@
   </div>
 
   <script>
-    let currentLoginMode = "shop";
-
-    function setLoginType(type) {
-      currentLoginMode = type;
-      const btnShop = document.getElementById("tabBtnShop");
-      const btnSuper = document.getElementById("tabBtnSuper");
-      const formShop = document.getElementById("loginFormShop");
-      const formSuper = document.getElementById("loginFormSuper");
-      const title = document.getElementById("loginTitle");
-      const sub = document.getElementById("loginSubtitle");
-      const icon = document.getElementById("loginIcon");
-      const errBox = document.getElementById("errorAlert");
-      const regFooter = document.getElementById("registerFooter");
-      errBox.style.display = "none";
-
-      if (type === "shop") {
-        btnShop.style.background = "#2563eb";
-        btnShop.style.color = "#fff";
-        btnSuper.style.background = "transparent";
-        btnSuper.style.color = "#64748b";
-        formShop.style.display = "block";
-        formSuper.style.display = "none";
-        title.textContent = "ଦୋକାନୀ ଲଗ୍ଇନ୍";
-        sub.textContent = "ଆପଣଙ୍କ ଦୋକାନ କଣ୍ଟ୍ରୋଲ୍ ପ୍ୟାନେଲ୍ କୁ ପ୍ରବେଶ କରନ୍ତୁ";
-        icon.textContent = "🏪";
-        regFooter.style.display = "block";
-      } else {
-        btnSuper.style.background = "#0f172a";
-        btnSuper.style.color = "#fff";
-        btnShop.style.background = "transparent";
-        btnShop.style.color = "#64748b";
-        formShop.style.display = "none";
-        formSuper.style.display = "block";
-        title.textContent = "ସୁପର୍ ଆଡମିନ୍ ଲଗ୍ଇନ୍";
-        sub.textContent = "ସମସ୍ତ ଦୋକାନ ଓ SaaS ମାଷ୍ଟର୍ କଣ୍ଟ୍ରୋଲ୍";
-        icon.textContent = "👑";
-        regFooter.style.display = "none";
-      }
-    }
-
     async function handleShopLogin(e) {
       e.preventDefault();
       const btn = document.getElementById("btnSubmitShop");
@@ -189,6 +128,7 @@
 
         localStorage.setItem("current_shop_id", data.shop.shop_id);
         localStorage.setItem("current_shop_name", data.shop.shop_name);
+        localStorage.setItem("shop_auth_token", data.token || data.shop.connector_token || "");
         localStorage.removeItem("is_superadmin");
 
         btn.textContent = "✅ ସଫଳ ହେଲା! ଡ୍ୟାସବୋର୍ଡ ଖୋଲୁଛି...";
@@ -200,41 +140,6 @@
         errBox.style.display = "block";
         btn.disabled = false;
         btn.textContent = "🔓 ଡ୍ୟାସବୋର୍ଡ ଖୋଲନ୍ତୁ (Shop Login)";
-      }
-    }
-
-    async function handleSuperLogin(e) {
-      e.preventDefault();
-      const pin = document.getElementById("superPin").value.trim();
-      const btn = document.getElementById("btnSubmitSuper");
-      const errBox = document.getElementById("errorAlert");
-      errBox.style.display = "none";
-
-      btn.disabled = true;
-      btn.textContent = "⏳ ଯାଞ୍ଚ ହେଉଛି...";
-
-      try {
-        const res = await fetch("/api/superadmin/login", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ pin: pin })
-        });
-        const data = await res.json();
-        if (!res.ok) throw new Error(data.detail || "ଭୁଲ୍ Master PIN!");
-
-        sessionStorage.setItem("superadmin_pin", pin);
-        localStorage.setItem("superadmin_pin", pin);
-        localStorage.setItem("is_superadmin", "true");
-
-        btn.textContent = "✅ ସଫଳ ହେଲା! ସୁପର୍ ଆଡମିନ୍ ଖୋଲୁଛି...";
-        setTimeout(() => {
-          window.location.href = "/dashboard?view=superadmin";
-        }, 500);
-      } catch (err) {
-        errBox.textContent = err.message;
-        errBox.style.display = "block";
-        btn.disabled = false;
-        btn.textContent = "👑 ସୁପର୍ ଆଡମିନ୍ ପ୍ରବେଶ (Master Login)";
       }
     }
   </script>

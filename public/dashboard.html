@@ -84,14 +84,7 @@
         </div>
       </div>
     </div>
-      <!-- SUPER ADMIN CONTROLS IN HEADER -->
-      <div id="superAdminHeaderBox" style="display: none; align-items: center; gap: 8px;">
-        <span style="background: #38bdf8; color: #0f172a; font-weight: 800; padding: 5px 10px; border-radius: 6px; font-size: 0.78rem;">👑 SUPER ADMIN</span>
-        <select id="superShopSelector" onchange="switchCurrentShop(this.value)" style="background: #1e293b; color: #fff; border: 1.5px solid #38bdf8; border-radius: 8px; padding: 6px 12px; font-size: 0.85rem; font-weight: 700; cursor: pointer;" title="ଦୋକାନ ବାଛନ୍ତୁ (Switch Shop)"></select>
-      </div>
-      <button id="btnHeaderSuperPin" onclick="openSuperPinModal()" class="btn btn-sm" style="background: #0f172a; color: #38bdf8; border: 1px solid #38bdf8; font-weight: 700;">
-        👑 Master PIN
-      </button>
+    <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
       <a href="#" id="customerPortalLink" target="_blank" class="btn btn-sm btn-primary" style="background: #0284c7;">
         🌐 ଗ୍ରାହକ ପୋର୍ଟାଲ୍ ଦେଖନ୍ତୁ
       </a>
@@ -109,9 +102,6 @@
     <button class="nav-tab" onclick="switchTab('payment')">💳 ପେମେଣ୍ଟ୍ & QR ସେଟିଙ୍ଗ୍</button>
     <button class="nav-tab" onclick="switchTab('standee')">🪧 କାଉଣ୍ଟର୍ QR ପୋଷ୍ଟର୍</button>
     <button class="nav-tab" onclick="switchTab('subscription')">🌟 ଆପଣଙ୍କ ପ୍ଲାନ୍ (୨ Plans)</button>
-    <button class="nav-tab" id="tabBtnSuperAdmin" onclick="switchTab('superadmin')" style="background: #0f172a; color: #38bdf8; font-weight: 700;">
-      👑 ସୁପର୍ ଆଡମିନ୍
-    </button>
   </nav>
 
   <main class="admin-content">
@@ -766,104 +756,6 @@
       </div>
     </section>
 
-    <!-- ==================== SUPER ADMIN MASTER CONTROL TAB ==================== -->
-    <section id="tab-superadmin" style="display: none;">
-      <!-- SUPER ADMIN TOP CARDS -->
-      <div style="background: #0f172a; border-radius: 16px; padding: 24px; color: #fff; margin-bottom: 24px; box-shadow: 0 10px 25px rgba(0,0,0,0.15);">
-        <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px; margin-bottom: 20px;">
-          <div>
-            <h2 style="margin: 0; font-size: 1.4rem; color: #38bdf8; display: flex; align-items: center; gap: 8px;">
-              👑 ସୁପର୍ ଆଡମିନ୍ କଣ୍ଟ୍ରୋଲ୍ ପ୍ୟାନେଲ୍ (Master Overview)
-            </h2>
-            <p style="margin: 4px 0 0; color: #94a3b8; font-size: 0.88rem;">
-              ପ୍ଲାଟଫର୍ମରେ ପଞ୍ଜିକୃତ ସମସ୍ତ ଦୋକାନ, ସବସ୍କ୍ରିପସନ୍, ପ୍ରିଣ୍ଟ୍ ଏବଂ ୟୁଜର୍ କଣ୍ଟ୍ରୋଲ୍
-            </p>
-          </div>
-          <button onclick="loadSuperAdminData()" class="btn btn-sm" style="background: #1e293b; color: #38bdf8; border: 1px solid #38bdf8; font-weight: 700;">
-            🔄 ରିଫ୍ରେସ୍ (Refresh Data)
-          </button>
-        </div>
-
-        <!-- KPI GRID -->
-        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 14px;">
-          <div style="background: #1e293b; padding: 16px; border-radius: 12px; border: 1px solid #334155;">
-            <div style="font-size: 0.8rem; color: #94a3b8; font-weight: 700;">ସମୁଦାୟ ଦୋକାନ (Total Shops)</div>
-            <div id="saKpiTotalShops" style="font-size: 1.8rem; font-weight: 800; color: #fff; margin-top: 4px;">0</div>
-          </div>
-          <div style="background: #1e293b; padding: 16px; border-radius: 12px; border: 1px solid #334155;">
-            <div style="font-size: 0.8rem; color: #94a3b8; font-weight: 700;">ସକ୍ରିୟ ଦୋକାନ (Active Sub)</div>
-            <div id="saKpiActiveShops" style="font-size: 1.8rem; font-weight: 800; color: #4ade80; margin-top: 4px;">0</div>
-          </div>
-          <div style="background: #1e293b; padding: 16px; border-radius: 12px; border: 1px solid #334155;">
-            <div style="font-size: 0.8rem; color: #94a3b8; font-weight: 700;">ସମାପ୍ତ ଦୋକାନ (Expired)</div>
-            <div id="saKpiExpiredShops" style="font-size: 1.8rem; font-weight: 800; color: #f87171; margin-top: 4px;">0</div>
-          </div>
-          <div style="background: #1e293b; padding: 16px; border-radius: 12px; border: 1px solid #334155;">
-            <div style="font-size: 0.8rem; color: #94a3b8; font-weight: 700;">ସମୁଦାୟ ପ୍ରିଣ୍ଟ୍ ଅର୍ଡର୍ (Total Orders)</div>
-            <div id="saKpiTotalJobs" style="font-size: 1.8rem; font-weight: 800; color: #38bdf8; margin-top: 4px;">0</div>
-          </div>
-          <div style="background: #1e293b; padding: 16px; border-radius: 12px; border: 1px solid #334155;">
-            <div style="font-size: 0.8rem; color: #94a3b8; font-weight: 700;">ସମୁଦାୟ ପେଜ୍ ପ୍ରିଣ୍ଟ୍ (Total Pages)</div>
-            <div id="saKpiTotalPages" style="font-size: 1.8rem; font-weight: 800; color: #fbbf24; margin-top: 4px;">0</div>
-          </div>
-        </div>
-      </div>
-
-      <!-- SHOPS MANAGEMENT CARD -->
-      <div class="admin-card" style="margin-bottom: 24px;">
-        <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px; margin-bottom: 16px;">
-          <h3 style="margin: 0; color: #0f172a;">🏪 ସମସ୍ତ ପଞ୍ଜିକୃତ ଦୋକାନୀ ସଦସ୍ୟ (All Registered Shops)</h3>
-          <input type="text" id="saShopSearchInput" oninput="filterSaShopsTable()" placeholder="🔍 ଦୋକାନ ନାମ, ମୋବାଇଲ୍, ID ଖୋଜନ୍ତୁ..." style="padding: 8px 14px; border-radius: 8px; border: 1.5px solid #cbd5e1; font-size: 0.9rem; min-width: 250px;">
-        </div>
-
-        <div style="overflow-x: auto;">
-          <table class="jobs-table" style="width: 100%; border-collapse: collapse;">
-            <thead>
-              <tr style="background: #f8fafc; border-bottom: 2px solid #e2e8f0;">
-                <th style="padding: 12px; text-align: left;">ଦୋକାନ & ମାଲିକ</th>
-                <th style="padding: 12px; text-align: left;">ମୋବାଇଲ୍ & ପାସୱାର୍ଡ</th>
-                <th style="padding: 12px; text-align: left;">Shop ID & Token</th>
-                <th style="padding: 12px; text-align: left;">ଗ୍ରାହକ ଲିଙ୍କ୍</th>
-                <th style="padding: 12px; text-align: left;">ସବସ୍କ୍ରିପସନ୍</th>
-                <th style="padding: 12px; text-align: left;">କାର୍ଯ୍ୟ (Actions)</th>
-              </tr>
-            </thead>
-            <tbody id="saShopsTableBody">
-              <tr><td colspan="6" style="text-align: center; padding: 24px; color: #64748b;">ଲୋଡ୍ ହେଉଛି...</td></tr>
-            </tbody>
-          </table>
-        </div>
-      </div>
-
-      <!-- SAAS GLOBAL SETTINGS CARD -->
-      <div class="admin-card">
-        <h3 style="margin: 0 0 16px; color: #0f172a;">⚙️ SaaS ପ୍ଲାଟଫର୍ମ ସେଟିଙ୍ଗ୍ (Global Settings)</h3>
-        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 16px;">
-          <div>
-            <label style="font-size: 0.85rem; font-weight: 700; color: #334155; display: block; margin-bottom: 6px;">
-              🎁 ନୂଆ ଦୋକାନୀଙ୍କ ମାଗଣା ଟ୍ରାଏଲ୍ ଦିନ (Free Trial Days):
-            </label>
-            <input type="number" id="saInputFreeTrialDays" class="form-control" value="180">
-          </div>
-          <div>
-            <label style="font-size: 0.85rem; font-weight: 700; color: #334155; display: block; margin-bottom: 6px;">
-              🔑 ସୁପର୍ ଆଡମିନ୍ Master PIN:
-            </label>
-            <input type="text" id="saInputMasterPin" class="form-control" value="1234">
-          </div>
-          <div>
-            <label style="font-size: 0.85rem; font-weight: 700; color: #334155; display: block; margin-bottom: 6px;">
-              💳 SaaS ପ୍ଲାଟଫର୍ମ UPI ID (Renewal QR):
-            </label>
-            <input type="text" id="saInputPlatformUpi" class="form-control" value="9937037131@ybl">
-          </div>
-        </div>
-        <button onclick="saveSaasSettingsFromDashboard()" class="btn btn-primary" style="margin-top: 16px; padding: 10px 20px; font-weight: 700;">
-          💾 ସେଟିଙ୍ଗ୍ ସେଭ୍ କରନ୍ତୁ
-        </button>
-      </div>
-    </section>
-
   </main>
 
   <!-- RENEWAL MODAL -->
@@ -924,97 +816,6 @@
           📝 ମାନୁଆଲ୍ UTR ସବମିଟ୍ କରନ୍ତୁ
         </button>
       </div>
-    </div>
-  </div>
-
-  <!-- SUPER ADMIN PIN MODAL -->
-  <div class="modal-overlay" id="saPinModal">
-    <div class="modal-card" style="max-width: 400px; text-align: center;">
-      <span style="font-size: 2.5rem;">👑</span>
-      <h3 style="margin: 8px 0 4px; color: #0f172a;">ସୁପର୍ ଆଡମିନ୍ PIN</h3>
-      <p style="font-size: 0.85rem; color: #64748b; margin-bottom: 20px;">
-        ମାଷ୍ଟର୍ କଣ୍ଟ୍ରୋଲ୍ ପାଇଁ Master PIN ପ୍ରବେଶ କରନ୍ତୁ:
-      </p>
-      <div id="saPinError" style="display: none; background: #fef2f2; border-left: 4px solid #ef4444; color: #991b1b; padding: 10px; border-radius: 6px; font-size: 0.85rem; margin-bottom: 14px;"></div>
-      <input type="password" id="inputSaPin" class="form-control" placeholder="PIN ଦିଅନ୍ତୁ (1234)" style="text-align: center; font-size: 1.3rem; letter-spacing: 4px; font-weight: 700; margin-bottom: 16px;">
-      <div style="display: flex; gap: 10px;">
-        <button onclick="closeSuperPinModal()" class="btn btn-secondary" style="flex: 1;">ବାତିଲ୍ (Cancel)</button>
-        <button onclick="submitSuperPinPrompt()" class="btn btn-primary" style="flex: 1; background: #0f172a; border-color: #0f172a;">ଅନଲକ୍ (Unlock)</button>
-      </div>
-    </div>
-  </div>
-
-  <!-- SUPER ADMIN EDIT SHOP MODAL -->
-  <div class="modal-overlay" id="saEditShopModal">
-    <div class="modal-card" style="max-width: 600px;">
-      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
-        <h3 style="margin: 0; color: #0f172a;">✏️ ଦୋକାନ ସମ୍ପାଦନା (Edit Shop)</h3>
-        <button onclick="closeSaEditShopModal()" style="background: none; border: none; font-size: 1.4rem; cursor: pointer;">✕</button>
-      </div>
-      <form onsubmit="handleSaEditShopSubmit(event)">
-        <input type="hidden" id="saEditShopId">
-        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 12px;">
-          <div>
-            <label style="font-size: 0.82rem; font-weight: 700; color: #334155;">ଦୋକାନ ନାମ *</label>
-            <input type="text" id="saEditShopName" class="form-control" required>
-          </div>
-          <div>
-            <label style="font-size: 0.82rem; font-weight: 700; color: #334155;">ମାଲିକଙ୍କ ନାମ *</label>
-            <input type="text" id="saEditOwnerName" class="form-control" required>
-          </div>
-        </div>
-        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 12px;">
-          <div>
-            <label style="font-size: 0.82rem; font-weight: 700; color: #334155;">ମୋବାଇଲ୍ ନମ୍ବର *</label>
-            <input type="tel" id="saEditMobile" class="form-control" required>
-          </div>
-          <div>
-            <label style="font-size: 0.82rem; font-weight: 700; color: #334155;">ୟୁନିକ୍ Slug (/s/slug) *</label>
-            <input type="text" id="saEditSlug" class="form-control" required>
-          </div>
-        </div>
-        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 12px;">
-          <div>
-            <label style="font-size: 0.82rem; font-weight: 700; color: #334155;">B&W ଦର (₹)</label>
-            <input type="number" step="0.5" id="saEditRateBw" class="form-control" required>
-          </div>
-          <div>
-            <label style="font-size: 0.82rem; font-weight: 700; color: #334155;">Color ଦର (₹)</label>
-            <input type="number" step="0.5" id="saEditRateColor" class="form-control" required>
-          </div>
-        </div>
-        <div style="margin-bottom: 16px;">
-          <label style="font-size: 0.82rem; font-weight: 700; color: #334155;">ଦୋକାନର ସ୍ଥିତି (Status)</label>
-          <select id="saEditIsActive" class="form-control">
-            <option value="1">🟢 ସକ୍ରିୟ (Active)</option>
-            <option value="0">🔴 ନିଷ୍କ୍ରିୟ (Suspended / Inactive)</option>
-          </select>
-        </div>
-        <button type="submit" class="btn btn-primary" style="width: 100%; padding: 12px; font-weight: 700;">
-          💾 ସେଭ୍ କରନ୍ତୁ (Save Changes)
-        </button>
-      </form>
-    </div>
-  </div>
-
-  <!-- SUPER ADMIN RESET PASSWORD MODAL -->
-  <div class="modal-overlay" id="saResetPassModal">
-    <div class="modal-card" style="max-width: 420px;">
-      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
-        <h3 style="margin: 0; color: #0f172a;">🔑 ପାସୱାର୍ଡ ରିସେଟ୍</h3>
-        <button onclick="closeSaResetPassModal()" style="background: none; border: none; font-size: 1.4rem; cursor: pointer;">✕</button>
-      </div>
-      <form onsubmit="handleSaResetPassSubmit(event)">
-        <input type="hidden" id="saResetShopId">
-        <p id="saResetShopNameText" style="font-size: 0.9rem; color: #475569; font-weight: 700; margin-bottom: 14px;"></p>
-        <div style="margin-bottom: 16px;">
-          <label style="font-size: 0.82rem; font-weight: 700; color: #334155;">ନୂଆ ପାସୱାର୍ଡ ଦିଅନ୍ତୁ *</label>
-          <input type="text" id="saNewPasswordInput" class="form-control" placeholder="କମରେ ୪ ଅକ୍ଷର" required minlength="4">
-        </div>
-        <button type="submit" class="btn btn-primary" style="width: 100%; padding: 12px; font-weight: 700; background: #d97706; border-color: #d97706;">
-          🔒 ପାସୱାର୍ଡ ବଦଳାନ୍ତୁ (Update Password)
-        </button>
-      </form>
     </div>
   </div>
 

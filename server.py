@@ -8,7 +8,7 @@ import urllib.parse
 from pathlib import Path
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, UploadFile, File, Form, HTTPException, BackgroundTasks, Request, Depends
-from fastapi.responses import HTMLResponse, FileResponse, JSONResponse, PlainTextResponse
+from fastapi.responses import HTMLResponse, FileResponse, JSONResponse, PlainTextResponse, Response
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 from typing import Optional
@@ -162,7 +162,9 @@ def register_member(body: RegisterRequest):
     )
     if "error" in res:
         raise HTTPException(status_code=400, detail=res["error"])
-    return {"success": True, "shop": res}
+    safe_shop = dict(res)
+    safe_shop.pop("password", None)
+    return {"success": True, "shop": safe_shop, "token": res["connector_token"]}
 
 class LoginRequest(BaseModel):
     mobile: str
@@ -171,17 +173,59 @@ class LoginRequest(BaseModel):
 @app.post("/api/auth/login")
 def login_member(body: LoginRequest):
     shop = database.get_shop_by_mobile(body.mobile.strip())
-    if not shop or shop["password"] != body.password.strip():
+    if not shop or not database.verify_password(shop["password"], body.password.strip()):
         raise HTTPException(status_code=401, detail="ଭୁଲ୍ ମୋବାଇଲ୍ ନମ୍ବର କିମ୍ବା ପାସୱାର୍ଡ!")
-    return {"success": True, "shop": shop}
+    safe_shop = dict(shop)
+    safe_shop.pop("password", None)
+    return {"success": True, "shop": safe_shop, "token": shop["connector_token"]}
 
-# ==================== SHOP DASHBOARD APIS ====================
+# ==================== SHOP DASHBOARD & AUTH APIS ====================
 
-@app.get("/api/shop/{shop_id}")
-def get_shop_details(shop_id: str):
+def verify_shop_auth(shop_id: str, request: Request) -> dict:
+    """
+    Verifies that the caller owns the shop or is the superadmin.
+    Prevents IDOR, customer payment bypass, and unauthorized shop tampering.
+    """
     shop = database.get_shop_by_id(shop_id)
     if not shop:
         raise HTTPException(status_code=404, detail="Shop not found")
+    
+    token = (
+        request.headers.get("X-Shop-Token")
+        or request.query_params.get("token")
+        or request.headers.get("Authorization", "").replace("Bearer ", "").strip()
+    )
+    master_pin = os.environ.get("MASTER_PIN") or database.get_saas_setting("master_pin", "1234")
+    
+    if token and (token == shop.get("connector_token") or token == master_pin):
+        return shop
+        
+    raise HTTPException(status_code=401, detail="Unauthorized: Shop authentication token required")
+
+@app.get("/api/shop/{shop_id}")
+def get_shop_details(shop_id: str, request: Request):
+    shop = database.get_shop_by_id(shop_id)
+    if not shop:
+        raise HTTPException(status_code=404, detail="Shop not found")
+    
+    token = (
+        request.headers.get("X-Shop-Token")
+        or request.query_params.get("token")
+        or request.headers.get("Authorization", "").replace("Bearer ", "").strip()
+    )
+    master_pin = os.environ.get("MASTER_PIN") or database.get_saas_setting("master_pin", "1234")
+    is_authenticated = bool(token and (token == shop.get("connector_token") or token == master_pin))
+    
+    # Never expose plaintext password to anyone
+    shop.pop("password", None)
+    
+    # If not authenticated owner, hide sensitive connector token and gateway secrets
+    if not is_authenticated:
+        shop.pop("connector_token", None)
+        shop.pop("smbupi_api_secret", None)
+        shop.pop("smbupi_webhook_secret", None)
+        shop.pop("phonepe_client_secret", None)
+        shop.pop("paytm_merchant_key", None)
     
     # Calculate subscription validity
     shop["days_left"] = database.get_subscription_days_left(shop)
@@ -232,10 +276,8 @@ class ShopSettingsUpdate(BaseModel):
     smbupi_enabled: Optional[int] = None
 
 @app.post("/api/shop/{shop_id}/settings")
-def update_shop_config(shop_id: str, body: ShopSettingsUpdate):
-    shop = database.get_shop_by_id(shop_id)
-    if not shop:
-        raise HTTPException(status_code=404, detail="Shop not found")
+def update_shop_config(shop_id: str, body: ShopSettingsUpdate, request: Request):
+    shop = verify_shop_auth(shop_id, request)
     
     updated = database.update_shop_settings(shop_id, {
         "shop_name": body.shop_name,
@@ -266,21 +308,29 @@ def update_shop_config(shop_id: str, body: ShopSettingsUpdate):
     return {"success": True, "shop": updated}
 
 @app.post("/api/shop/{shop_id}/upload-qr")
-async def upload_shop_standee_qr(shop_id: str, file: UploadFile = File(...)):
+async def upload_shop_standee_qr(shop_id: str, request: Request, file: UploadFile = File(...)):
+    verify_shop_auth(shop_id, request)
+    allowed_types = ["image/jpeg", "image/png", "image/webp", "image/jpg"]
+    if file.content_type and file.content_type.lower() not in allowed_types:
+        raise HTTPException(status_code=400, detail="Invalid image type. Please upload a JPG, PNG, or WEBP image.")
     content = await file.read()
     if not content:
         raise HTTPException(status_code=400, detail="Empty file")
+    if len(content) > 5 * 1024 * 1024:
+        raise HTTPException(status_code=413, detail="File too large (Maximum size 5MB)")
     b64_img = f"data:{file.content_type or 'image/png'};base64," + base64.b64encode(content).decode("utf-8")
     database.update_shop_settings(shop_id, {"shop_qr_image": b64_img})
     return {"success": True, "shop_qr_image": b64_img}
 
 @app.delete("/api/shop/{shop_id}/remove-qr")
-def remove_shop_standee_qr(shop_id: str):
+def remove_shop_standee_qr(shop_id: str, request: Request):
+    verify_shop_auth(shop_id, request)
     database.update_shop_settings(shop_id, {"shop_qr_image": ""})
     return {"success": True}
 
 @app.get("/api/shop/{shop_id}/jobs")
-def get_shop_orders(shop_id: str):
+def get_shop_orders(shop_id: str, request: Request):
+    verify_shop_auth(shop_id, request)
     jobs = database.get_shop_jobs(shop_id)
     stats = database.get_shop_stats(shop_id)
     return {"jobs": jobs, "stats": stats}
@@ -334,6 +384,8 @@ async def customer_upload(request: Request, shop_id: str = Form(...)):
             content = await read_fn() if inspect.iscoroutinefunction(read_fn) else read_fn()
             fname = getattr(item, "filename", None) or "document.pdf"
             if content:
+                if len(content) > 50 * 1024 * 1024:
+                    raise HTTPException(status_code=413, detail=f"ଫାଇଲ୍ '{fname}' ବହୁତ ବଡ଼ ଅଟେ (ସର୍ବାଧିକ 50MB ଅନୁମୋଦିତ)।")
                 files_data.append((fname, content))
                 
     if not files_data:
@@ -413,6 +465,8 @@ async def customer_add_files(job_id: str, request: Request):
             content = await read_fn() if inspect.iscoroutinefunction(read_fn) else read_fn()
             fname = getattr(item, "filename", None) or "document.pdf"
             if content:
+                if len(content) > 50 * 1024 * 1024:
+                    raise HTTPException(status_code=413, detail=f"ଫାଇଲ୍ '{fname}' ବହୁତ ବଡ଼ ଅଟେ (ସର୍ବାଧିକ 50MB ଅନୁମୋଦିତ)।")
                 new_files_data.append((fname, content))
                 
     if not new_files_data:
@@ -736,7 +790,7 @@ def customer_check_smbupi_status(job_id: str, background_tasks: BackgroundTasks)
 async def phonepe_webhook_handler(request: Request, background_tasks: BackgroundTasks):
     """
     Receives instant payment notifications from PhonePe.
-    Triggers automated print execution immediately when payment is confirmed.
+    Triggers automated print execution immediately when payment is confirmed and verified.
     """
     try:
         body_bytes = await request.body()
@@ -776,6 +830,13 @@ async def phonepe_webhook_handler(request: Request, background_tasks: Background
         if order_id:
             job = database.get_job(order_id)
             if job and is_success and job.get("payment_status") != "paid":
+                shop = database.get_shop_by_id(job["shop_id"])
+                if shop and shop.get("phonepe_enabled") and shop.get("phonepe_mid") and shop.get("phonepe_salt_key"):
+                    ph_res = check_phonepe_order_status(shop["phonepe_mid"], shop["phonepe_salt_key"], shop.get("phonepe_salt_index", "1"), order_id)
+                    if not (ph_res.get("success") and ph_res.get("status") == "PAYMENT_SUCCESS"):
+                        print(f"[PHONEPE WEBHOOK REJECTED] Order {order_id} failed PhonePe gateway status check: {ph_res}")
+                        return JSONResponse(status_code=403, content={"status": "FORBIDDEN", "detail": "PhonePe payment verification failed"})
+
                 database.update_job_status(order_id, {
                     "payment_status": "paid",
                     "print_status": "printing"
@@ -792,7 +853,7 @@ async def phonepe_webhook_handler(request: Request, background_tasks: Background
 async def paytm_webhook_handler(request: Request, background_tasks: BackgroundTasks):
     """
     Receives instant payment notifications from Paytm Business.
-    Triggers automated print execution immediately when payment is confirmed.
+    Triggers automated print execution immediately when payment is confirmed and verified.
     """
     try:
         content_type = request.headers.get("content-type", "")
@@ -809,6 +870,13 @@ async def paytm_webhook_handler(request: Request, background_tasks: BackgroundTa
         if order_id and status in ["TXN_SUCCESS", "SUCCESS"]:
             job = database.get_job(order_id)
             if job and job.get("payment_status") != "paid":
+                shop = database.get_shop_by_id(job["shop_id"])
+                if shop and shop.get("paytm_enabled") and shop.get("paytm_mid") and shop.get("paytm_merchant_key"):
+                    ptm_res = check_paytm_order_status(shop["paytm_mid"], shop["paytm_merchant_key"], order_id)
+                    if not (ptm_res.get("success") and ptm_res.get("status") == "TXN_SUCCESS"):
+                        print(f"[PAYTM WEBHOOK REJECTED] Order {order_id} failed Paytm gateway status check: {ptm_res}")
+                        return JSONResponse(status_code=403, content={"status": "FORBIDDEN", "detail": "Paytm order verification failed"})
+
                 database.update_job_status(order_id, {
                     "payment_status": "paid",
                     "print_status": "printing",
@@ -853,25 +921,35 @@ async def smb_universal_payment_webhook(request: Request, background_tasks: Back
         payment_method = (payload.get("payment_method") or data_obj.get("payment_method") or payload.get("payment_mode") or data_obj.get("payment_mode") or "UPI").upper()
         currency = (payload.get("currency") or data_obj.get("currency") or "INR").upper()
         
-        # Verify Signature if provided
+        # Verify Signature & Gateway Authenticity (Fixes VULN-02)
         signature = request.headers.get("X-PayIndia-Signature") or request.headers.get("X-Webhook-Signature") or ""
-        if signature:
-            secret = ""
-            if order_id.startswith("SUB-"):
-                saas = database.get_all_saas_settings()
-                secret = saas.get("superadmin_smbupi_api_secret") or os.environ.get("SMB_API_SECRET", "")
-            else:
-                job = database.get_job(order_id)
-                if job:
-                    shop = database.get_shop_by_id(job["shop_id"])
-                    secret = (shop.get("smbupi_api_secret") if shop else "") or os.environ.get("SMB_API_SECRET", "")
-                else:
-                    secret = os.environ.get("SMB_API_SECRET", "")
-            
-            if secret:
+        secret = ""
+        api_key = ""
+        if order_id.startswith("SUB-"):
+            saas = database.get_all_saas_settings()
+            secret = saas.get("superadmin_smbupi_api_secret") or os.environ.get("SMB_API_SECRET", "")
+            api_key = saas.get("superadmin_smbupi_api_key") or os.environ.get("SMB_API_KEY", "")
+        else:
+            job = database.get_job(order_id)
+            if job:
+                shop = database.get_shop_by_id(job["shop_id"])
+                if shop:
+                    secret = (shop.get("smbupi_api_secret") or "").strip() or os.environ.get("SMB_API_SECRET", "")
+                    api_key = (shop.get("smbupi_api_key") or "").strip() or os.environ.get("SMB_API_KEY", "")
+        
+        if secret:
+            if signature:
                 is_valid_sig = verify_smbupi_webhook_signature(body_bytes, signature, secret)
                 if not is_valid_sig:
-                    print(f"[SMB WEBHOOK WARNING] Signature verification failed for order {order_id}")
+                    print(f"[SMB WEBHOOK REJECTED] Signature verification failed for order {order_id}")
+                    return JSONResponse(status_code=403, content={"status": "FORBIDDEN", "detail": "Invalid webhook signature"})
+            elif api_key:
+                check_res = check_smbupi_order_status(api_key, secret, order_id)
+                if not (check_res.get("success") or check_res.get("status") == "success"):
+                    print(f"[SMB WEBHOOK REJECTED] Unsigned order {order_id} failed gateway status check")
+                    return JSONResponse(status_code=403, content={"status": "FORBIDDEN", "detail": "Unsigned webhook could not be verified by gateway"})
+            else:
+                return JSONResponse(status_code=403, content={"status": "FORBIDDEN", "detail": "Webhook signature required"})
         
         if order_id and is_success:
             # 1. Super Admin SaaS Platform Subscription Order
@@ -915,6 +993,24 @@ async def superadmin_subscription_webhook(request: Request):
             
         event = (payload.get("event") or "").lower()
         is_success = (status == "success" or event in ["payment.success", "order.paid", "success"])
+        
+        saas = database.get_all_saas_settings()
+        secret = saas.get("superadmin_smbupi_api_secret") or os.environ.get("SMB_API_SECRET", "")
+        api_key = saas.get("superadmin_smbupi_api_key") or os.environ.get("SMB_API_KEY", "")
+        signature = request.headers.get("X-PayIndia-Signature") or request.headers.get("X-Webhook-Signature") or ""
+        
+        if secret:
+            if signature:
+                if not verify_smbupi_webhook_signature(body_bytes, signature, secret):
+                    print(f"[SUPERADMIN WEBHOOK REJECTED] Signature mismatch for {order_id}")
+                    return JSONResponse(status_code=403, content={"status": "FORBIDDEN", "detail": "Invalid webhook signature"})
+            elif api_key:
+                check_res = check_smbupi_order_status(api_key, secret, order_id)
+                if not (check_res.get("success") or check_res.get("status") == "success"):
+                    print(f"[SUPERADMIN WEBHOOK REJECTED] Order {order_id} failed gateway status check")
+                    return JSONResponse(status_code=403, content={"status": "FORBIDDEN", "detail": "Gateway verification failed"})
+            else:
+                return JSONResponse(status_code=403, content={"status": "FORBIDDEN", "detail": "Webhook signature required"})
         
         if order_id and is_success:
             res_sub = database.complete_subscription_order(order_id, payment_ref=payload.get("utr", ""))
@@ -989,7 +1085,8 @@ def customer_claim_paid(job_id: str, background_tasks: BackgroundTasks):
 # ==================== MERCHANT ORDER ACTIONS ====================
 
 @app.post("/api/shop/{shop_id}/jobs/{job_id}/approve")
-def merchant_approve_order(shop_id: str, job_id: str, background_tasks: BackgroundTasks):
+def merchant_approve_order(shop_id: str, job_id: str, request: Request, background_tasks: BackgroundTasks):
+    verify_shop_auth(shop_id, request)
     job = database.get_job(job_id)
     if not job or job["shop_id"] != shop_id:
         raise HTTPException(status_code=404, detail="Job not found")
@@ -1003,7 +1100,8 @@ def merchant_approve_order(shop_id: str, job_id: str, background_tasks: Backgrou
     return {"success": True, "job": updated}
 
 @app.post("/api/shop/{shop_id}/jobs/{job_id}/reject")
-def merchant_reject_order(shop_id: str, job_id: str):
+def merchant_reject_order(shop_id: str, job_id: str, request: Request):
+    verify_shop_auth(shop_id, request)
     job = database.get_job(job_id)
     if not job or job["shop_id"] != shop_id:
         raise HTTPException(status_code=404, detail="Job not found")
@@ -1016,7 +1114,8 @@ def merchant_reject_order(shop_id: str, job_id: str):
     return {"success": True, "job": updated}
 
 @app.post("/api/shop/{shop_id}/jobs/{job_id}/reprint")
-def merchant_reprint_order(shop_id: str, job_id: str, background_tasks: BackgroundTasks):
+def merchant_reprint_order(shop_id: str, job_id: str, request: Request, background_tasks: BackgroundTasks):
+    verify_shop_auth(shop_id, request)
     job = database.get_job(job_id)
     if not job or job["shop_id"] != shop_id:
         raise HTTPException(status_code=404, detail="Job not found")
@@ -1026,7 +1125,8 @@ def merchant_reprint_order(shop_id: str, job_id: str, background_tasks: Backgrou
     return {"success": True, "message": "Reprint triggered"}
 
 @app.delete("/api/shop/{shop_id}/jobs/{job_id}")
-def merchant_delete_order(shop_id: str, job_id: str):
+def merchant_delete_order(shop_id: str, job_id: str, request: Request):
+    verify_shop_auth(shop_id, request)
     delete_job_files(job_id)
     database.delete_job(job_id, shop_id)
     return {"success": True}
@@ -1070,7 +1170,21 @@ def connector_download_pdf(job_id: str, token: str):
     if not shop or shop["connector_token"] != token:
         raise HTTPException(status_code=401, detail="Unauthorized")
     
-    pdf_path = prepare_final_print_pdf(job_id)
+    try:
+        pdf_path = prepare_final_print_pdf(job_id)
+    except FileNotFoundError:
+        # Mark as failed so it does not block the print queue
+        database.update_job_status(job_id, {
+            "print_status": "failed",
+            "print_error": "Document file expired or missing on server"
+        })
+        raise HTTPException(status_code=404, detail="Document file not found or expired on server")
+    except Exception as e:
+        database.update_job_status(job_id, {
+            "print_status": "failed",
+            "print_error": str(e)
+        })
+        raise HTTPException(status_code=500, detail=f"Failed to prepare print document: {e}")
     return FileResponse(pdf_path, media_type="application/pdf", filename=f"{job_id}.pdf")
 
 class ConnectorConfirm(BaseModel):
@@ -1157,7 +1271,8 @@ def download_windows_app():
     return FileResponse(BASE_DIR / "smart_print_app.py", media_type="text/plain", filename="smart_print_app.py")
 
 @app.get("/api/connector/config/{shop_id}")
-def download_connector_config(shop_id: str):
+def download_connector_config(shop_id: str, request: Request):
+    verify_shop_auth(shop_id, request)
     shop = database.get_shop_by_id(shop_id)
     if not shop:
         raise HTTPException(status_code=404, detail="Shop not found")
@@ -1184,7 +1299,8 @@ def download_connector_python_script():
     return FileResponse(BASE_DIR / "print_connector.py", media_type="text/plain", filename="print_connector.py")
 
 @app.get("/api/connector/download-launcher/{shop_id}")
-def download_connector_launcher(shop_id: str):
+def download_connector_launcher(shop_id: str, request: Request):
+    verify_shop_auth(shop_id, request)
     shop = database.get_shop_by_id(shop_id)
     if not shop:
         raise HTTPException(status_code=404, detail="Shop not found")
@@ -1232,7 +1348,8 @@ pause
     return PlainTextResponse(bat_content, media_type="text/plain", headers={"Content-Disposition": f"attachment; filename=start_connector_{shop['slug']}.bat"})
 
 @app.get("/api/connector/download-change-printer/{shop_id}")
-def download_change_printer_launcher(shop_id: str):
+def download_change_printer_launcher(shop_id: str, request: Request):
+    verify_shop_auth(shop_id, request)
     shop = database.get_shop_by_id(shop_id)
     if not shop:
         raise HTTPException(status_code=404, detail="Shop not found")
@@ -1271,11 +1388,12 @@ class TestPrintRequest(BaseModel):
     shop_id: Optional[str] = ""
 
 @app.post("/api/test-print")
-def run_test_print(body: TestPrintRequest):
+def run_test_print(body: TestPrintRequest, request: Request):
     try:
         if not body.shop_id:
             raise HTTPException(status_code=400, detail="Shop ID is required for test print")
             
+        verify_shop_auth(body.shop_id, request)
         shop = database.get_shop_by_id(body.shop_id)
         if not shop:
             raise HTTPException(status_code=404, detail="Shop not found")
@@ -1332,21 +1450,48 @@ def get_network_info():
 
 # ==================== SUPERADMIN APIS (MASTER CONTROLS) ====================
 
+SUPERADMIN_LOGIN_ATTEMPTS = {}  # ip -> {"attempts": int, "locked_until": float}
+
+def verify_superadmin_pin(pin: str, request: Optional[Request] = None) -> bool:
+    client_ip = "unknown"
+    if request:
+        client_ip = request.headers.get("x-forwarded-for", "").split(",")[0].strip() or (request.client.host if request.client else "unknown")
+    
+    now = time.time()
+    if client_ip in SUPERADMIN_LOGIN_ATTEMPTS:
+        rec = SUPERADMIN_LOGIN_ATTEMPTS[client_ip]
+        if rec.get("locked_until", 0) > now:
+            remaining = int(rec["locked_until"] - now)
+            raise HTTPException(status_code=429, detail=f"Too many failed PIN attempts. Locked for {remaining} seconds.")
+        elif rec.get("locked_until", 0) <= now and rec.get("locked_until", 0) > 0:
+            SUPERADMIN_LOGIN_ATTEMPTS[client_ip] = {"attempts": 0, "locked_until": 0}
+
+    master_pin = os.environ.get("MASTER_PIN") or database.get_saas_setting("master_pin", "1234")
+    if not pin or pin.strip() != master_pin.strip():
+        rec = SUPERADMIN_LOGIN_ATTEMPTS.get(client_ip, {"attempts": 0, "locked_until": 0})
+        rec["attempts"] += 1
+        if rec["attempts"] >= 5:
+            rec["locked_until"] = now + 600  # 10 minute lockout
+            SUPERADMIN_LOGIN_ATTEMPTS[client_ip] = rec
+            raise HTTPException(status_code=429, detail="Account locked due to 5 consecutive failed attempts. Locked for 10 minutes.")
+        SUPERADMIN_LOGIN_ATTEMPTS[client_ip] = rec
+        raise HTTPException(status_code=401, detail="Invalid Super Admin PIN")
+        
+    if client_ip in SUPERADMIN_LOGIN_ATTEMPTS:
+        SUPERADMIN_LOGIN_ATTEMPTS.pop(client_ip, None)
+    return True
+
 class SuperAdminLoginRequest(BaseModel):
     pin: str
 
 @app.post("/api/superadmin/login")
-def superadmin_auth(body: SuperAdminLoginRequest):
-    master_pin = database.get_saas_setting("master_pin", "1234")
-    if body.pin.strip() != master_pin:
-        raise HTTPException(status_code=401, detail="Invalid Super Admin PIN")
+def superadmin_auth(body: SuperAdminLoginRequest, request: Request):
+    verify_superadmin_pin(body.pin, request)
     return {"success": True}
 
 @app.get("/api/superadmin/overview")
-def superadmin_overview(pin: str):
-    master_pin = database.get_saas_setting("master_pin", "1234")
-    if pin.strip() != master_pin:
-        raise HTTPException(status_code=401, detail="Unauthorized")
+def superadmin_overview(pin: str, request: Request):
+    verify_superadmin_pin(pin, request)
     
     overview = database.get_superadmin_overview()
     shops = database.get_all_shops_for_superadmin()
@@ -1366,10 +1511,8 @@ class ExtendSubscriptionRequest(BaseModel):
     days: int
 
 @app.post("/api/superadmin/extend")
-def superadmin_extend_sub(body: ExtendSubscriptionRequest):
-    master_pin = database.get_saas_setting("master_pin", "1234")
-    if body.pin.strip() != master_pin:
-        raise HTTPException(status_code=401, detail="Unauthorized")
+def superadmin_extend_sub(body: ExtendSubscriptionRequest, request: Request):
+    verify_superadmin_pin(body.pin, request)
     
     new_exp = database.extend_shop_subscription(body.shop_id, body.days)
     return {"success": True, "new_expiry": new_exp}
@@ -1379,10 +1522,8 @@ class ToggleShopRequest(BaseModel):
     shop_id: str
 
 @app.post("/api/superadmin/toggle-shop")
-def superadmin_toggle_shop(body: ToggleShopRequest):
-    master_pin = database.get_saas_setting("master_pin", "1234")
-    if body.pin.strip() != master_pin:
-        raise HTTPException(status_code=401, detail="Unauthorized")
+def superadmin_toggle_shop(body: ToggleShopRequest, request: Request):
+    verify_superadmin_pin(body.pin, request)
     
     database.toggle_shop_active(body.shop_id)
     return {"success": True}
@@ -1404,10 +1545,8 @@ class SuperAdminShopUpdateRequest(BaseModel):
     subscription_expires_at: Optional[str] = None
 
 @app.post("/api/superadmin/shop/update")
-def superadmin_update_shop_endpoint(body: SuperAdminShopUpdateRequest):
-    master_pin = database.get_saas_setting("master_pin", "1234")
-    if body.pin.strip() != master_pin:
-        raise HTTPException(status_code=401, detail="Unauthorized")
+def superadmin_update_shop_endpoint(body: SuperAdminShopUpdateRequest, request: Request):
+    verify_superadmin_pin(body.pin, request)
     
     data = body.model_dump()
     res = database.superadmin_update_shop(body.shop_id, data)
@@ -1421,10 +1560,8 @@ class SuperAdminResetPasswordRequest(BaseModel):
     new_password: str
 
 @app.post("/api/superadmin/shop/reset-password")
-def superadmin_reset_password_endpoint(body: SuperAdminResetPasswordRequest):
-    master_pin = database.get_saas_setting("master_pin", "1234")
-    if body.pin.strip() != master_pin:
-        raise HTTPException(status_code=401, detail="Unauthorized")
+def superadmin_reset_password_endpoint(body: SuperAdminResetPasswordRequest, request: Request):
+    verify_superadmin_pin(body.pin, request)
     
     if not body.new_password or len(body.new_password.strip()) < 4:
         raise HTTPException(status_code=400, detail="Password must be at least 4 characters")
@@ -1437,10 +1574,8 @@ class SuperAdminDeleteShopRequest(BaseModel):
     shop_id: str
 
 @app.post("/api/superadmin/shop/delete")
-def superadmin_delete_shop_endpoint(body: SuperAdminDeleteShopRequest):
-    master_pin = database.get_saas_setting("master_pin", "1234")
-    if body.pin.strip() != master_pin:
-        raise HTTPException(status_code=401, detail="Unauthorized")
+def superadmin_delete_shop_endpoint(body: SuperAdminDeleteShopRequest, request: Request):
+    verify_superadmin_pin(body.pin, request)
         
     database.superadmin_delete_shop(body.shop_id)
     return {"success": True}
@@ -1462,10 +1597,8 @@ class UpdatePlansRequest(BaseModel):
     new_master_pin: Optional[str] = None
 
 @app.post("/api/superadmin/settings")
-def superadmin_update_settings(body: UpdatePlansRequest):
-    master_pin = database.get_saas_setting("master_pin", "1234")
-    if body.pin.strip() != master_pin:
-        raise HTTPException(status_code=401, detail="Unauthorized")
+def superadmin_update_settings(body: UpdatePlansRequest, request: Request):
+    verify_superadmin_pin(body.pin, request)
     
     database.set_saas_setting("plan1_name", body.plan1_name)
     database.set_saas_setting("plan1_days", body.plan1_days)

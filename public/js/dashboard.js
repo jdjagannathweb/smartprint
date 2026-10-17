@@ -1,12 +1,27 @@
 let currentShopId = localStorage.getItem("current_shop_id") || "";
-let isSuperAdmin = localStorage.getItem("is_superadmin") === "true";
-let superadminPin = sessionStorage.getItem("superadmin_pin") || localStorage.getItem("superadmin_pin") || "";
 let currentShop = null;
 let availablePrinters = [];
 let knownClaimedJobIds = new Set();
 let audioContext = null;
 let selectedModalPlan = "plan2";
-let saShopsList = [];
+
+// Automatic Secure Header Interceptor
+const _nativeFetch = window.fetch;
+window.fetch = function(url, options) {
+  options = options || {};
+  options.headers = options.headers || {};
+  const token = localStorage.getItem("shop_auth_token") || sessionStorage.getItem("superadmin_pin") || localStorage.getItem("superadmin_pin") || "";
+  if (token) {
+    if (options.headers instanceof Headers) {
+      if (!options.headers.has("X-Shop-Token")) options.headers.set("X-Shop-Token", token);
+    } else if (Array.isArray(options.headers)) {
+      options.headers.push(["X-Shop-Token", token]);
+    } else {
+      options.headers["X-Shop-Token"] = token;
+    }
+  }
+  return _nativeFetch(url, options);
+};
 
 document.addEventListener("DOMContentLoaded", async () => {
   const urlParams = new URLSearchParams(window.location.search);
@@ -16,17 +31,8 @@ document.addEventListener("DOMContentLoaded", async () => {
     localStorage.setItem("current_shop_id", currentShopId);
   }
 
-  if (isSuperAdmin || superadminPin) {
-    initSuperAdminUI();
-  }
-
-  // If no shop session and not superadmin, redirect to login immediately
+  // If no shop session, redirect to login immediately
   if (!currentShopId) {
-    if (isSuperAdmin || superadminPin) {
-      switchTab("superadmin");
-      await loadSuperAdminData();
-      return;
-    }
     window.location.href = "/login";
     return;
   }
@@ -35,11 +41,6 @@ document.addEventListener("DOMContentLoaded", async () => {
   await loadPrinters();
   await loadJobsTable();
   await checkDesktopAppStatus();
-
-  if (urlParams.get("view") === "superadmin" && (isSuperAdmin || superadminPin)) {
-    switchTab("superadmin");
-    await loadSuperAdminData();
-  }
 
   // Polling
   setInterval(loadJobsTable, 3000);
@@ -157,9 +158,6 @@ function switchTab(tabId) {
   if (tabId === "printer") {
     loadPrinters();
   }
-  if (tabId === "superadmin") {
-    loadSuperAdminData();
-  }
 }
 
 function handleLogout() {
@@ -175,8 +173,9 @@ async function loadShopDetails() {
   try {
     const res = await fetch(`/api/shop/${currentShopId}`);
     if (!res.ok) {
-      if (res.status === 404) {
+      if (res.status === 401 || res.status === 404) {
         localStorage.removeItem("current_shop_id");
+        localStorage.removeItem("shop_auth_token");
         window.location.href = "/login";
         return;
       }
@@ -184,6 +183,9 @@ async function loadShopDetails() {
     }
     const shop = await res.json();
     currentShop = shop;
+    if (shop.connector_token && !localStorage.getItem("shop_auth_token")) {
+      localStorage.setItem("shop_auth_token", shop.connector_token);
+    }
 
     // Header updates
     document.getElementById("topShopName").textContent = shop.shop_name;
@@ -197,10 +199,13 @@ async function loadShopDetails() {
     document.getElementById("standeeShopTitle").textContent = shop.shop_name;
 
     // Connector Download Buttons
+    const shopToken = localStorage.getItem("shop_auth_token") || shop.connector_token || "";
+    const tokenQuery = shopToken ? `?token=${encodeURIComponent(shopToken)}` : "";
+
     const btnConnector = document.getElementById("btnDownloadConnector");
-    if (btnConnector) btnConnector.href = `/api/connector/download-launcher/${shop.shop_id}`;
+    if (btnConnector) btnConnector.href = `/api/connector/download-launcher/${shop.shop_id}${tokenQuery}`;
     const btnChange = document.getElementById("btnDownloadChangePrinter");
-    if (btnChange) btnChange.href = `/api/connector/download-change-printer/${shop.shop_id}`;
+    if (btnChange) btnChange.href = `/api/connector/download-change-printer/${shop.shop_id}${tokenQuery}`;
 
     // Desktop App Credentials & Download Config
     const dispShopId = document.getElementById("dispShopId");
@@ -208,7 +213,7 @@ async function loadShopDetails() {
     const dispToken = document.getElementById("dispConnectorToken");
     if (dispToken) dispToken.value = shop.connector_token || "";
     const btnCfgJson = document.getElementById("btnDownloadConfigJson");
-    if (btnCfgJson) btnCfgJson.href = `/api/connector/config/${shop.shop_id}`;
+    if (btnCfgJson) btnCfgJson.href = `/api/connector/config/${shop.shop_id}${tokenQuery}`;
 
     // Pricing (Single and Double Sided) & Auto-Print
     document.getElementById("rateBwInput").value = shop.rate_bw || 2.0;
@@ -1258,414 +1263,3 @@ function escapeHtml(text) {
   });
 }
 
-// ==================== SUPER ADMIN UNIFIED CONTROLS ====================
-
-function initSuperAdminUI() {
-  const btnPin = document.getElementById("btnHeaderSuperPin");
-  const saBox = document.getElementById("superAdminHeaderBox");
-  const tabBtn = document.getElementById("tabBtnSuperAdmin");
-
-  if (tabBtn) tabBtn.style.display = "inline-block";
-  if (btnPin) btnPin.style.display = "none";
-  if (saBox) saBox.style.display = "flex";
-}
-
-function openSuperPinModal() {
-  document.getElementById("saPinError").style.display = "none";
-  document.getElementById("inputSaPin").value = "";
-  document.getElementById("saPinModal").style.display = "flex";
-  document.getElementById("inputSaPin").focus();
-}
-
-function closeSuperPinModal() {
-  document.getElementById("saPinModal").style.display = "none";
-}
-
-async function submitSuperPinPrompt() {
-  const pin = document.getElementById("inputSaPin").value.trim();
-  const errBox = document.getElementById("saPinError");
-  errBox.style.display = "none";
-
-  if (!pin) {
-    errBox.textContent = "ଦୟାକରି Master PIN ଦିଅନ୍ତୁ!";
-    errBox.style.display = "block";
-    return;
-  }
-
-  try {
-    const res = await fetch("/api/superadmin/login", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ pin: pin })
-    });
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.detail || "ଭୁଲ୍ Master PIN!");
-
-    superadminPin = pin;
-    isSuperAdmin = true;
-    sessionStorage.setItem("superadmin_pin", pin);
-    localStorage.setItem("superadmin_pin", pin);
-    localStorage.setItem("is_superadmin", "true");
-
-    closeSuperPinModal();
-    initSuperAdminUI();
-    switchTab("superadmin");
-    await loadSuperAdminData();
-  } catch (err) {
-    errBox.textContent = err.message;
-    errBox.style.display = "block";
-  }
-}
-
-async function loadSuperAdminData() {
-  const pin = superadminPin || sessionStorage.getItem("superadmin_pin") || localStorage.getItem("superadmin_pin") || "";
-  if (!pin) {
-    openSuperPinModal();
-    return;
-  }
-
-  try {
-    const res = await fetch(`/api/superadmin/overview?pin=${encodeURIComponent(pin)}`);
-    if (!res.ok) {
-      if (res.status === 401) {
-        localStorage.removeItem("is_superadmin");
-        sessionStorage.removeItem("superadmin_pin");
-        localStorage.removeItem("superadmin_pin");
-        openSuperPinModal();
-        return;
-      }
-      throw new Error("Failed to load Super Admin overview");
-    }
-
-    const data = await res.json();
-    const overview = data.overview || {};
-    const shops = data.shops || [];
-    const settings = data.settings || {};
-
-    // KPIs
-    const elTotShops = document.getElementById("saKpiTotalShops");
-    if (elTotShops) elTotShops.textContent = overview.total_shops || shops.length || 0;
-    const elActShops = document.getElementById("saKpiActiveShops");
-    if (elActShops) elActShops.textContent = overview.active_shops || 0;
-    const elExpShops = document.getElementById("saKpiExpiredShops");
-    if (elExpShops) elExpShops.textContent = overview.expired_shops || 0;
-    const elTotJobs = document.getElementById("saKpiTotalJobs");
-    if (elTotJobs) elTotJobs.textContent = overview.total_jobs || 0;
-    const elTotPages = document.getElementById("saKpiTotalPages");
-    if (elTotPages) elTotPages.textContent = overview.total_pages || 0;
-
-    // SaaS Settings
-    if (settings.free_trial_days && document.getElementById("saInputFreeTrialDays")) {
-      document.getElementById("saInputFreeTrialDays").value = settings.free_trial_days;
-    }
-    if (settings.master_pin && document.getElementById("saInputMasterPin")) {
-      document.getElementById("saInputMasterPin").value = settings.master_pin;
-    }
-    if (settings.superadmin_upi && document.getElementById("saInputPlatformUpi")) {
-      document.getElementById("saInputPlatformUpi").value = settings.superadmin_upi;
-    }
-
-    saShopsList = shops;
-    renderSaShopsTable(shops);
-    populateSuperShopSelector(shops);
-  } catch (err) {
-    console.error("Superadmin overview error:", err);
-  }
-}
-
-function populateSuperShopSelector(shops) {
-  const select = document.getElementById("superShopSelector");
-  if (!select) return;
-
-  select.innerHTML = shops.map(s => `
-    <option value="${s.shop_id}" ${s.shop_id === currentShopId ? "selected" : ""}>
-      🏪 ${escapeHtml(s.shop_name)} (${s.shop_id})
-    </option>
-  `).join("");
-}
-
-function renderSaShopsTable(shops) {
-  const tbody = document.getElementById("saShopsTableBody");
-  if (!tbody) return;
-
-  if (shops.length === 0) {
-    tbody.innerHTML = `<tr><td colspan="6" style="text-align: center; padding: 24px; color: #64748b;">କୌଣସି ଦୋକାନ ମିଳିଲା ନାହିଁ।</td></tr>`;
-    return;
-  }
-
-  tbody.innerHTML = shops.map(s => {
-    const isValid = s.is_valid;
-    const daysLeft = s.days_left !== undefined ? s.days_left : 0;
-    const statusBadge = isValid 
-      ? `<span style="background: #dcfce7; color: #15803d; padding: 3px 8px; border-radius: 999px; font-size: 0.75rem; font-weight: 700;">🟢 ସକ୍ରିୟ (${daysLeft} ଦିନ)</span>` 
-      : `<span style="background: #fee2e2; color: #b91c1c; padding: 3px 8px; border-radius: 999px; font-size: 0.75rem; font-weight: 700;">🔴 ସମାପ୍ତ (୦ ଦିନ)</span>`;
-
-    const isCurrentActive = s.shop_id === currentShopId;
-
-    return `
-      <tr style="${isCurrentActive ? 'background: #eff6ff; font-weight: 600;' : ''}">
-        <td style="padding: 12px;">
-          <div style="font-weight: 700; color: #0f172a; font-size: 0.95rem;">${escapeHtml(s.shop_name)}</div>
-          <div style="font-size: 0.8rem; color: #64748b;">ମାଲିକ: ${escapeHtml(s.owner_name)}</div>
-        </td>
-        <td style="padding: 12px;">
-          <div style="font-weight: 700; color: #1e293b;">📱 ${s.mobile}</div>
-          <div style="font-size: 0.8rem; color: #64748b; margin-top: 2px;">
-            Pass: <code style="background: #f1f5f9; padding: 2px 6px; border-radius: 4px; color: #0284c7;">${escapeHtml(s.password)}</code>
-          </div>
-        </td>
-        <td style="padding: 12px;">
-          <div style="font-family: monospace; font-weight: 700; color: #1e293b; font-size: 0.85rem;">${s.shop_id}</div>
-          <div style="font-family: monospace; font-size: 0.75rem; color: #64748b;" title="Connector Token">${s.connector_token || "N/A"}</div>
-        </td>
-        <td style="padding: 12px;">
-          <a href="/s/${s.slug}" target="_blank" style="color: #2563eb; text-decoration: none; font-weight: 600; font-size: 0.85rem;">
-            /s/${s.slug} ↗
-          </a>
-        </td>
-        <td style="padding: 12px;">
-          <div>${statusBadge}</div>
-          <div style="font-size: 0.75rem; color: #64748b; margin-top: 2px;">Exp: ${s.subscription_expires_at || "N/A"}</div>
-        </td>
-        <td style="padding: 12px;">
-          <div style="display: flex; gap: 6px; flex-wrap: wrap;">
-            <button class="btn btn-sm btn-primary" style="font-size: 0.75rem; padding: 5px 8px; font-weight: 700;" onclick="switchCurrentShop('${s.shop_id}')" title="ଏହି ଦୋକାନର ଲାଇଭ୍ କଣ୍ଟ୍ରୋଲ୍ ଖୋଲନ୍ତୁ">
-              🏪 ${isCurrentActive ? 'ସକ୍ରିୟ ଦୋକାନ' : 'ଏହି ଦୋକାନ ଖୋଲନ୍ତୁ'}
-            </button>
-            <button class="btn btn-sm" style="background: #059669; color: #fff; font-size: 0.75rem; padding: 5px 8px;" onclick="extendShopPlan('${s.shop_id}', 30)" title="୩୦ ଦିନ ବୃଦ୍ଧି କରନ୍ତୁ">
-              +୩୦ଦିନ
-            </button>
-            <button class="btn btn-sm" style="background: #0284c7; color: #fff; font-size: 0.75rem; padding: 5px 8px;" onclick="extendShopPlan('${s.shop_id}', 180)" title="୬ ମାସ ବୃଦ୍ଧି କରନ୍ତୁ">
-              +୬ମାସ
-            </button>
-            <button class="btn btn-sm" style="background: #475569; color: #fff; font-size: 0.75rem; padding: 5px 8px;" onclick="openEditShopModal('${s.shop_id}')" title="ଏଡିଟ୍ କରନ୍ତୁ">
-              ✏️
-            </button>
-            <button class="btn btn-sm" style="background: #d97706; color: #fff; font-size: 0.75rem; padding: 5px 8px;" onclick="openResetPassModal('${s.shop_id}')" title="ପାସୱାର୍ଡ ରିସେଟ୍">
-              🔑
-            </button>
-            <button class="btn btn-sm" style="background: ${s.is_active ? '#ef4444' : '#16a34a'}; color: #fff; font-size: 0.75rem; padding: 5px 8px;" onclick="toggleShop('${s.shop_id}')" title="${s.is_active ? 'ବନ୍ଦ କରନ୍ତୁ' : 'ଚାଲୁ କରନ୍ତୁ'}">
-              ${s.is_active ? '⏸️' : '▶️'}
-            </button>
-          </div>
-        </td>
-      </tr>
-    `;
-  }).join("");
-}
-
-function filterSaShopsTable() {
-  const query = (document.getElementById("saShopSearchInput")?.value || "").toLowerCase().trim();
-  if (!query) {
-    renderSaShopsTable(saShopsList);
-    return;
-  }
-
-  const filtered = saShopsList.filter(s => 
-    (s.shop_name && s.shop_name.toLowerCase().includes(query)) ||
-    (s.owner_name && s.owner_name.toLowerCase().includes(query)) ||
-    (s.mobile && s.mobile.includes(query)) ||
-    (s.shop_id && s.shop_id.toLowerCase().includes(query)) ||
-    (s.slug && s.slug.toLowerCase().includes(query))
-  );
-  renderSaShopsTable(filtered);
-}
-
-async function switchCurrentShop(shopId) {
-  if (!shopId) return;
-  currentShopId = shopId;
-  localStorage.setItem("current_shop_id", currentShopId);
-
-  // Switch to orders tab
-  switchTab("orders");
-  await loadShopDetails();
-  await loadPrinters();
-  await loadJobsTable();
-  await checkDesktopAppStatus();
-
-  // Update super shop dropdown if visible
-  const select = document.getElementById("superShopSelector");
-  if (select) select.value = shopId;
-}
-
-async function extendShopPlan(shopId, days) {
-  const pin = superadminPin || sessionStorage.getItem("superadmin_pin") || localStorage.getItem("superadmin_pin") || "";
-  if (!pin) {
-    openSuperPinModal();
-    return;
-  }
-
-  if (!confirm(`ଏହି ଦୋକାନର ସବସ୍କ୍ରିପସନ୍ ${days} ଦିନ ବୃଦ୍ଧି କରିବାକୁ ଚାହାଁନ୍ତି କି?`)) return;
-
-  try {
-    const res = await fetch("/api/superadmin/extend", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ pin: pin, shop_id: shopId, days: days })
-    });
-    const data = await res.json();
-    if (res.ok && data.success) {
-      alert(`✅ ସବସ୍କ୍ରିପସନ୍ ${days} ଦିନ ସଫଳତାର ସହ ବୃଦ୍ଧି ହେଲା!\nନୂଆ ସମାପ୍ତ ତାରିଖ: ${data.new_expiry}`);
-      await loadSuperAdminData();
-      if (shopId === currentShopId) await loadShopDetails();
-    } else {
-      alert("ଭୁଲ୍: " + (data.detail || "ବିଫଳ ହେଲା"));
-    }
-  } catch (e) {
-    alert("ଭୁଲ୍: " + e.message);
-  }
-}
-
-async function toggleShop(shopId) {
-  const pin = superadminPin || sessionStorage.getItem("superadmin_pin") || localStorage.getItem("superadmin_pin") || "";
-  if (!pin) {
-    openSuperPinModal();
-    return;
-  }
-
-  try {
-    const res = await fetch("/api/superadmin/toggle-shop", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ pin: pin, shop_id: shopId })
-    });
-    const data = await res.json();
-    if (res.ok && data.success) {
-      await loadSuperAdminData();
-      if (shopId === currentShopId) await loadShopDetails();
-    } else {
-      alert("ଭୁଲ୍: " + (data.detail || "ବିଫଳ ହେଲା"));
-    }
-  } catch (e) {
-    alert("ଭୁଲ୍: " + e.message);
-  }
-}
-
-function openEditShopModal(shopId) {
-  const shop = saShopsList.find(s => s.shop_id === shopId);
-  if (!shop) return;
-
-  document.getElementById("saEditShopId").value = shop.shop_id;
-  document.getElementById("saEditShopName").value = shop.shop_name || "";
-  document.getElementById("saEditOwnerName").value = shop.owner_name || "";
-  document.getElementById("saEditMobile").value = shop.mobile || "";
-  document.getElementById("saEditSlug").value = shop.slug || "";
-  document.getElementById("saEditRateBw").value = shop.rate_bw || 2.0;
-  document.getElementById("saEditRateColor").value = shop.rate_color || 10.0;
-  document.getElementById("saEditIsActive").value = shop.is_active ? "1" : "0";
-
-  document.getElementById("saEditShopModal").style.display = "flex";
-}
-
-function closeSaEditShopModal() {
-  document.getElementById("saEditShopModal").style.display = "none";
-}
-
-async function handleSaEditShopSubmit(e) {
-  e.preventDefault();
-  const pin = superadminPin || sessionStorage.getItem("superadmin_pin") || localStorage.getItem("superadmin_pin") || "";
-  const shopId = document.getElementById("saEditShopId").value;
-
-  const payload = {
-    pin: pin,
-    shop_id: shopId,
-    shop_name: document.getElementById("saEditShopName").value.trim(),
-    owner_name: document.getElementById("saEditOwnerName").value.trim(),
-    mobile: document.getElementById("saEditMobile").value.trim(),
-    slug: document.getElementById("saEditSlug").value.trim(),
-    rate_bw: parseFloat(document.getElementById("saEditRateBw").value),
-    rate_color: parseFloat(document.getElementById("saEditRateColor").value),
-    is_active: parseInt(document.getElementById("saEditIsActive").value)
-  };
-
-  try {
-    const res = await fetch("/api/superadmin/shop/update", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload)
-    });
-    const data = await res.json();
-    if (res.ok && data.success) {
-      alert("✅ ଦୋକାନ ସୂଚନା ସଫଳତାର ସହ ଅପଡେଟ୍ ହେଲା!");
-      closeSaEditShopModal();
-      await loadSuperAdminData();
-      if (shopId === currentShopId) await loadShopDetails();
-    } else {
-      alert("ଭୁଲ୍: " + (data.detail || "ଅପଡେଟ୍ ବିଫଳ"));
-    }
-  } catch (err) {
-    alert("ଭୁଲ୍: " + err.message);
-  }
-}
-
-function openResetPassModal(shopId) {
-  const shop = saShopsList.find(s => s.shop_id === shopId);
-  if (!shop) return;
-
-  document.getElementById("saResetShopId").value = shop.shop_id;
-  document.getElementById("saResetShopNameText").textContent = `ଦୋକାନ: ${shop.shop_name} (Mobile: ${shop.mobile})`;
-  document.getElementById("saNewPasswordInput").value = "";
-  document.getElementById("saResetPassModal").style.display = "flex";
-}
-
-function closeSaResetPassModal() {
-  document.getElementById("saResetPassModal").style.display = "none";
-}
-
-async function handleSaResetPassSubmit(e) {
-  e.preventDefault();
-  const pin = superadminPin || sessionStorage.getItem("superadmin_pin") || localStorage.getItem("superadmin_pin") || "";
-  const shopId = document.getElementById("saResetShopId").value;
-  const newPass = document.getElementById("saNewPasswordInput").value.trim();
-
-  try {
-    const res = await fetch("/api/superadmin/shop/reset-password", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ pin: pin, shop_id: shopId, new_password: newPass })
-    });
-    const data = await res.json();
-    if (res.ok && data.success) {
-      alert("✅ ପାସୱାର୍ଡ ସଫଳତାର ସହ ବଦଳାଗଲା!");
-      closeSaResetPassModal();
-      await loadSuperAdminData();
-    } else {
-      alert("ଭୁଲ୍: " + (data.detail || "ପାସୱାର୍ଡ ରିସେଟ୍ ବିଫଳ"));
-    }
-  } catch (err) {
-    alert("ଭୁଲ୍: " + err.message);
-  }
-}
-
-async function saveSaasSettingsFromDashboard() {
-  const pin = superadminPin || sessionStorage.getItem("superadmin_pin") || localStorage.getItem("superadmin_pin") || "";
-  const trialDays = document.getElementById("saInputFreeTrialDays").value;
-  const masterPin = document.getElementById("saInputMasterPin").value;
-  const upiId = document.getElementById("saInputPlatformUpi").value;
-
-  try {
-    const res = await fetch("/api/superadmin/settings", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        pin: pin,
-        settings: {
-          free_trial_days: trialDays,
-          master_pin: masterPin,
-          superadmin_upi: upiId
-        }
-      })
-    });
-    const data = await res.json();
-    if (res.ok && data.success) {
-      alert("✅ SaaS ପ୍ଲାଟଫର୍ମ ସେଟିଙ୍ଗ୍ ସଫଳତାର ସହ ସେଭ୍ ହେଲା!");
-      superadminPin = masterPin;
-      sessionStorage.setItem("superadmin_pin", masterPin);
-      localStorage.setItem("superadmin_pin", masterPin);
-    } else {
-      alert("ଭୁଲ୍: " + (data.detail || "ସେଟିଙ୍ଗ୍ ସେଭ୍ ବିଫଳ"));
-    }
-  } catch (e) {
-    alert("ଭୁଲ୍: " + e.message);
-  }
-}

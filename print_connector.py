@@ -138,12 +138,24 @@ def print_pdf_silent(file_path, printer_name, copies=1, color_mode="bw", print_s
         return False
 
 def load_config():
-    if CONFIG_FILE.exists():
-        try:
-            with open(CONFIG_FILE, "r", encoding="utf-8") as f:
-                return json.load(f)
-        except Exception:
-            pass
+    candidates = [
+        CONFIG_FILE,
+        Path(__file__).parent / "connector_config.json",
+        Path(__file__).parent / "smart print final" / "connector_config.json",
+        Path.home() / "Downloads" / "connector_config.json",
+        Path.home() / "Downloads" / "smart print final" / "connector_config.json",
+        Path.home() / "Desktop" / "connector_config.json",
+        Path.home() / "Desktop" / "smart print final" / "connector_config.json"
+    ]
+    for c in candidates:
+        if c and c.exists():
+            try:
+                with open(c, "r", encoding="utf-8") as f:
+                    cfg = json.load(f)
+                    if cfg.get("shop_id") or cfg.get("token"):
+                        return cfg
+            except Exception:
+                pass
     return {}
 
 def save_config(cfg):
@@ -334,62 +346,72 @@ def main():
                     print(f"\n[WARN] Web Dashboard printer '{remote_printer}' is not installed on this PC! Keeping '{selected_printer}'")
 
             for job in jobs:
-                color_mode = str(job.get("color_mode", "bw")).lower()
-                
-                # Dynamic Printer Routing
-                if cfg.get("bw_printer") and cfg.get("color_printer"):
-                    if color_mode == "color":
-                        target_printer = cfg["color_printer"]
-                    else:
-                        target_printer = cfg["bw_printer"]
-                else:
-                    target_printer = cfg.get("printer") or selected_printer
-                
-                # Validate target_printer
-                if printers and (not target_printer or target_printer not in printers):
-                    target_printer = system_default if (system_default and system_default in printers) else printers[0]
-                    cfg["printer"] = target_printer
-                    selected_printer = target_printer
-                    save_config(cfg)
-
-                print_side = str(job.get("print_side", "single")).lower()
-                
-                print(f"\n>>> [NEW JOB RECEIVED] #{job['id']} - {job['original_name']}")
-                print(f"    Pages: {job['num_pages_to_print']} | Copies: {job['copies']} | Mode: {color_mode.upper()} | Side: {print_side.upper()}")
-                pdf_url = f"{server_url}/api/connector/download/{job['id']}?token={token}"
-                target_file = downloads_dir / f"{job['id']}.pdf"
-                
-                print(f"    [+] Downloading document...")
-                urllib.request.urlretrieve(pdf_url, str(target_file))
-                
-                print(f"    [+] Printing [{color_mode.upper()} | {print_side.upper()}] job silently to '{target_printer}'...")
-                success = print_pdf_silent(
-                    file_path=target_file,
-                    printer_name=target_printer,
-                    copies=job.get("copies", 1),
-                    color_mode=color_mode,
-                    print_side=print_side,
-                    valid_printers=printers,
-                    default_printer=system_default
-                )
-                
-                confirm_url = f"{server_url}/api/connector/jobs/{job['id']}/printed"
-                confirm_data = json.dumps({"token": token, "success": success}).encode("utf-8")
-                confirm_req = urllib.request.Request(confirm_url, data=confirm_data, headers={"Content-Type": "application/json"})
-                urllib.request.urlopen(confirm_req)
-                
-                if success:
-                    print(f"    [SUCCESS] Job #{job['id']} printed! Status updated to 'printed'.")
-                else:
-                    print(f"    [FAILED] Job #{job['id']} could not print on '{target_printer}'.")
-                
-                # Privacy Auto-Purge: Remove physical file from local computer
                 try:
-                    time.sleep(2)
-                    target_file.unlink(missing_ok=True)
-                    print(f"    [PRIVACY] Local file deleted securely.\n")
-                except Exception:
-                    pass
+                    color_mode = str(job.get("color_mode", "bw")).lower()
+                    
+                    # Dynamic Printer Routing
+                    if cfg.get("bw_printer") and cfg.get("color_printer"):
+                        if color_mode == "color":
+                            target_printer = cfg["color_printer"]
+                        else:
+                            target_printer = cfg["bw_printer"]
+                    else:
+                        target_printer = cfg.get("printer") or selected_printer
+                    
+                    # Validate target_printer
+                    if printers and (not target_printer or target_printer not in printers):
+                        target_printer = system_default if (system_default and system_default in printers) else printers[0]
+                        cfg["printer"] = target_printer
+                        selected_printer = target_printer
+                        save_config(cfg)
+
+                    print_side = str(job.get("print_side", "single")).lower()
+                    
+                    print(f"\n>>> [NEW JOB RECEIVED] #{job['id']} - {job['original_name']}")
+                    print(f"    Pages: {job['num_pages_to_print']} | Copies: {job['copies']} | Mode: {color_mode.upper()} | Side: {print_side.upper()}")
+                    pdf_url = f"{server_url}/api/connector/download/{job['id']}?token={token}"
+                    target_file = downloads_dir / f"{job['id']}.pdf"
+                    
+                    print(f"    [+] Downloading document...")
+                    urllib.request.urlretrieve(pdf_url, str(target_file))
+                    
+                    print(f"    [+] Printing [{color_mode.upper()} | {print_side.upper()}] job silently to '{target_printer}'...")
+                    success = print_pdf_silent(
+                        file_path=target_file,
+                        printer_name=target_printer,
+                        copies=job.get("copies", 1),
+                        color_mode=color_mode,
+                        print_side=print_side,
+                        valid_printers=printers,
+                        default_printer=system_default
+                    )
+                    
+                    confirm_url = f"{server_url}/api/connector/jobs/{job['id']}/printed"
+                    confirm_data = json.dumps({"token": token, "success": success}).encode("utf-8")
+                    confirm_req = urllib.request.Request(confirm_url, data=confirm_data, headers={"Content-Type": "application/json"})
+                    urllib.request.urlopen(confirm_req)
+                    
+                    if success:
+                        print(f"    [SUCCESS] Job #{job['id']} printed! Status updated to 'printed'.")
+                    else:
+                        print(f"    [FAILED] Job #{job['id']} could not print on '{target_printer}'.")
+                    
+                    # Privacy Auto-Purge: Remove physical file from local computer
+                    try:
+                        time.sleep(2)
+                        target_file.unlink(missing_ok=True)
+                        print(f"    [PRIVACY] Local file deleted securely.\n")
+                    except Exception:
+                        pass
+                except Exception as je:
+                    print(f"    [ERROR] Job #{job.get('id')} failed: {je}")
+                    try:
+                        confirm_url = f"{server_url}/api/connector/jobs/{job['id']}/printed"
+                        confirm_data = json.dumps({"token": token, "success": False, "error": str(je)}).encode("utf-8")
+                        confirm_req = urllib.request.Request(confirm_url, data=confirm_data, headers={"Content-Type": "application/json"})
+                        urllib.request.urlopen(confirm_req)
+                    except Exception:
+                        pass
                 
         except Exception:
             pass

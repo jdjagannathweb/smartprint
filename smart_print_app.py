@@ -85,12 +85,34 @@ def get_system_printers():
         return [], None
 
 def load_config():
-    if CONFIG_FILE.exists():
-        try:
-            with open(CONFIG_FILE, "r", encoding="utf-8") as f:
-                return json.load(f)
-        except Exception:
-            pass
+    # Multi-path search for connector_config.json
+    candidates = [
+        CONFIG_FILE,
+        APP_DIR / "connector_config.json",
+        APP_DIR / "smart print final" / "connector_config.json",
+        APP_DIR.parent / "connector_config.json",
+        Path.home() / "Downloads" / "connector_config.json",
+        Path.home() / "Downloads" / "smart print final" / "connector_config.json",
+        Path.home() / "Desktop" / "connector_config.json",
+        Path.home() / "Desktop" / "smart print final" / "connector_config.json",
+        Path.home() / "Desktop" / "SMARTPRINT_PROJECT_LATEST" / "connector_config.json"
+    ]
+    for c in candidates:
+        if c and c.exists():
+            try:
+                with open(c, "r", encoding="utf-8") as f:
+                    cfg = json.load(f)
+                    if cfg.get("shop_id") or cfg.get("token"):
+                        if c != CONFIG_FILE:
+                            try:
+                                with open(CONFIG_FILE, "w", encoding="utf-8") as out_f:
+                                    json.dump(cfg, out_f, indent=2)
+                            except Exception:
+                                pass
+                        return cfg
+            except Exception:
+                pass
+
     return {
         "server_url": "https://smartprint-xvt8.onrender.com",
         "shop_id": "",
@@ -541,7 +563,7 @@ class SmartPrintApp:
         def check():
             try:
                 url = f"{server}/api/shop/{shop_id}"
-                req = urllib.request.Request(url, headers={"User-Agent": "SmartPrintDesktop/1.0"})
+                req = urllib.request.Request(url, headers={"User-Agent": "SmartPrintDesktop/1.0", "X-Shop-Token": token})
                 with urllib.request.urlopen(req, timeout=6) as resp:
                     shop = json.loads(resp.read().decode("utf-8"))
                     self.root.after(0, lambda: self.on_verified(shop))
@@ -622,59 +644,81 @@ class SmartPrintApp:
                 shop_id = self.cfg.get("shop_id", "").strip()
                 token = self.cfg.get("token", "").strip()
 
-                if server and shop_id and token:
-                    # 1. Send Heartbeat to Cloud
+                if not (server and shop_id and token):
+                    fresh = load_config()
+                    if fresh.get("shop_id") and fresh.get("token"):
+                        self.cfg = fresh
+                        server = self.cfg.get("server_url", "").strip().rstrip("/")
+                        shop_id = self.cfg.get("shop_id", "").strip()
+                        token = self.cfg.get("token", "").strip()
+                        self.root.after(0, self.verify_cloud_connection)
+                    else:
+                        time.sleep(3)
+                        continue
+
+                # 1. Send Heartbeat to Cloud
+                try:
+                    hb_url = f"{server}/api/connector/heartbeat"
+                    hb_data = json.dumps({
+                        "shop_id": shop_id,
+                        "token": token,
+                        "status": "online",
+                        "active_printer": self.cfg.get("printer", ""),
+                        "printers": self.printers
+                    }).encode("utf-8")
+                    hb_req = urllib.request.Request(hb_url, data=hb_data, headers={"Content-Type": "application/json"})
+                    urllib.request.urlopen(hb_req, timeout=5)
+                except Exception:
+                    pass
+
+                # 2. Poll for Approved Print Jobs
+                url = f"{server}/api/connector/jobs?shop_id={shop_id}&token={token}"
+                req = urllib.request.Request(url, headers={"User-Agent": "SmartPrintDesktop/1.0"})
+                with urllib.request.urlopen(req, timeout=8) as resp:
+                    data = json.loads(resp.read().decode("utf-8"))
+                    if not self.is_connected:
+                        self.root.after(0, lambda: self.set_status(True, "CONNECTED TO CLOUD"))
+
+                jobs = data.get("jobs", [])
+
+                # Live Sync: Check if shop changed selected printer from Web Dashboard
+                remote_printer = data.get("selected_printer")
+                if remote_printer and remote_printer != self.cfg.get("printer"):
+                    if remote_printer in self.printers:
+                        self.cfg["printer"] = remote_printer
+                        save_config(self.cfg)
+                        self.root.after(0, lambda p=remote_printer: self.cb_single.set(p))
+                        self.root.after(0, self.update_routing_label)
+                    else:
+                        print(f"[WARN] Remote printer '{remote_printer}' not found on this machine! Retaining active '{self.cfg.get('printer')}'")
+
+                remote_bw = data.get("bw_printer")
+                if remote_bw and remote_bw != self.cfg.get("bw_printer"):
+                    if remote_bw in self.printers:
+                        self.cfg["bw_printer"] = remote_bw
+                        save_config(self.cfg)
+                        self.root.after(0, lambda p=remote_bw: self.cb_bw.set(p))
+
+                remote_col = data.get("color_printer")
+                if remote_col and remote_col != self.cfg.get("color_printer"):
+                    if remote_col in self.printers:
+                        self.cfg["color_printer"] = remote_col
+                        save_config(self.cfg)
+                        self.root.after(0, lambda p=remote_col: self.cb_color.set(p))
+
+                for job in jobs:
                     try:
-                        hb_url = f"{server}/api/connector/heartbeat"
-                        hb_data = json.dumps({
-                            "shop_id": shop_id,
-                            "token": token,
-                            "status": "online",
-                            "active_printer": self.cfg.get("printer", ""),
-                            "printers": self.printers
-                        }).encode("utf-8")
-                        hb_req = urllib.request.Request(hb_url, data=hb_data, headers={"Content-Type": "application/json"})
-                        urllib.request.urlopen(hb_req, timeout=5)
-                    except Exception:
-                        pass
-
-                    # 2. Poll for Approved Print Jobs
-                    url = f"{server}/api/connector/jobs?shop_id={shop_id}&token={token}"
-                    req = urllib.request.Request(url, headers={"User-Agent": "SmartPrintDesktop/1.0"})
-                    with urllib.request.urlopen(req, timeout=8) as resp:
-                        data = json.loads(resp.read().decode("utf-8"))
-                        if not self.is_connected:
-                            self.root.after(0, lambda: self.set_status(True, "CONNECTED TO CLOUD"))
-
-                    jobs = data.get("jobs", [])
-
-                    # Live Sync: Check if shop changed selected printer from Web Dashboard
-                    remote_printer = data.get("selected_printer")
-                    if remote_printer and remote_printer != self.cfg.get("printer"):
-                        if remote_printer in self.printers:
-                            self.cfg["printer"] = remote_printer
-                            save_config(self.cfg)
-                            self.root.after(0, lambda p=remote_printer: self.cb_single.set(p))
-                            self.root.after(0, self.update_routing_label)
-                        else:
-                            print(f"[WARN] Remote printer '{remote_printer}' not found on this machine! Retaining active '{self.cfg.get('printer')}'")
-
-                    remote_bw = data.get("bw_printer")
-                    if remote_bw and remote_bw != self.cfg.get("bw_printer"):
-                        if remote_bw in self.printers:
-                            self.cfg["bw_printer"] = remote_bw
-                            save_config(self.cfg)
-                            self.root.after(0, lambda p=remote_bw: self.cb_bw.set(p))
-
-                    remote_col = data.get("color_printer")
-                    if remote_col and remote_col != self.cfg.get("color_printer"):
-                        if remote_col in self.printers:
-                            self.cfg["color_printer"] = remote_col
-                            save_config(self.cfg)
-                            self.root.after(0, lambda p=remote_col: self.cb_color.set(p))
-
-                    for job in jobs:
                         self.process_job(job, server, token)
+                    except Exception as je:
+                        print(f"[JOB ERROR] Error processing job {job.get('id')}: {je}")
+                        # Immediately report error to cloud so a broken job NEVER blocks other jobs in queue
+                        try:
+                            confirm_url = f"{server}/api/connector/jobs/{job['id']}/printed"
+                            confirm_data = json.dumps({"token": token, "success": False, "error": str(je)}).encode("utf-8")
+                            req_fail = urllib.request.Request(confirm_url, data=confirm_data, headers={"Content-Type": "application/json"})
+                            urllib.request.urlopen(req_fail, timeout=5)
+                        except Exception:
+                            pass
 
             except Exception:
                 pass
