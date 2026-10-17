@@ -20,7 +20,10 @@ if sys.platform == "win32":
     except Exception:
         pass
 
-CONFIG_FILE = Path(__file__).parent / "connector_config.json"
+APPDATA_DIR = Path(os.environ.get("APPDATA", str(Path.home()))) / "SmartPrintCloud"
+APPDATA_DIR.mkdir(parents=True, exist_ok=True)
+CONFIG_FILE = APPDATA_DIR / "connector_config.json"
+LOCAL_CONFIG = Path(__file__).parent / "connector_config.json"
 
 def is_virtual_printer(name, port=""):
     nl = (name or "").lower()
@@ -159,8 +162,16 @@ def load_config():
     return {}
 
 def save_config(cfg):
-    with open(CONFIG_FILE, "w", encoding="utf-8") as f:
-        json.dump(cfg, f, indent=2)
+    try:
+        with open(CONFIG_FILE, "w", encoding="utf-8") as f:
+            json.dump(cfg, f, indent=2)
+    except Exception as e:
+        print(f"    [WARN] Failed to save config to AppData: {e}")
+    try:
+        with open(LOCAL_CONFIG, "w", encoding="utf-8") as f:
+            json.dump(cfg, f, indent=2)
+    except Exception:
+        pass
 
 def configure_printers_interactive(cfg):
     printers, system_default = get_installed_printers()

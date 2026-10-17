@@ -21,8 +21,11 @@ if getattr(sys, "frozen", False):
 else:
     APP_DIR = Path(__file__).parent
 
-CONFIG_FILE = APP_DIR / "connector_config.json"
-TEMP_DIR = APP_DIR / "temp_prints"
+APPDATA_DIR = Path(os.environ.get("APPDATA", str(Path.home()))) / "SmartPrintCloud"
+APPDATA_DIR.mkdir(parents=True, exist_ok=True)
+CONFIG_FILE = APPDATA_DIR / "connector_config.json"
+LOCAL_CONFIG = APP_DIR / "connector_config.json"
+TEMP_DIR = APPDATA_DIR / "temp_prints"
 TEMP_DIR.mkdir(exist_ok=True)
 
 # SumatraPDF path
@@ -130,7 +133,12 @@ def save_config(cfg):
         with open(CONFIG_FILE, "w", encoding="utf-8") as f:
             json.dump(cfg, f, indent=2)
     except Exception as e:
-        print(f"Error saving config: {e}")
+        print(f"Error saving config to APPDATA: {e}")
+    try:
+        with open(LOCAL_CONFIG, "w", encoding="utf-8") as f:
+            json.dump(cfg, f, indent=2)
+    except Exception:
+        pass
 
 def set_windows_auto_start(enable: bool, exe_or_script_path: str):
     """Adds or removes shortcut in Windows Startup folder."""
@@ -360,8 +368,12 @@ class SmartPrintApp:
         card_shop = tk.LabelFrame(self.tab_dashboard, text="🏪 Connected Shop & Status", font=("Segoe UI", 10, "bold"), bg="#ffffff", fg="#1e3a8a", padx=14, pady=10)
         card_shop.pack(fill=tk.X, padx=8, pady=8)
 
-        self.lbl_shop_title = tk.Label(card_shop, text="Shop: Loading...", font=("Segoe UI", 11, "bold"), bg="#ffffff", fg="#0f172a")
-        self.lbl_shop_title.pack(anchor="w")
+        top_shop_row = tk.Frame(card_shop, bg="#ffffff")
+        top_shop_row.pack(fill=tk.X)
+        self.lbl_shop_title = tk.Label(top_shop_row, text="Shop: Loading...", font=("Segoe UI", 11, "bold"), bg="#ffffff", fg="#0f172a")
+        self.lbl_shop_title.pack(side=tk.LEFT)
+        btn_quick_login = tk.Button(top_shop_row, text="📱 ମୋବାଇଲ୍ ଲଗ୍ଇନ୍ / Login", font=("Segoe UI", 8, "bold"), bg="#ecfdf5", fg="#047857", padx=8, pady=1, relief="groove", cursor="hand2", command=lambda: self.notebook.select(self.tab_settings))
+        btn_quick_login.pack(side=tk.RIGHT)
 
         self.lbl_shop_sub = tk.Label(card_shop, text="ID: - | Plan: Free Trial (Active)", font=("Segoe UI", 8), bg="#ffffff", fg="#64748b")
         self.lbl_shop_sub.pack(anchor="w", pady=(2, 6))
@@ -399,9 +411,31 @@ class SmartPrintApp:
         scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
 
     def build_tab_settings(self):
-        # 1. Cloud Credentials Card
-        card_sync = tk.LabelFrame(self.tab_settings, text="🔗 Cloud Website Link & Sync", font=("Segoe UI", 10, "bold"), bg="#ffffff", fg="#1e3a8a", padx=14, pady=12)
-        card_sync.pack(fill=tk.X, padx=8, pady=8)
+        # 0. Mobile & Password Quick Login Card (Zero Files / Direct Connect)
+        card_login = tk.LabelFrame(self.tab_settings, text="📱 Shopkeeper Login (ମୋବାଇଲ୍ ଓ ପାସୱାର୍ଡ ଦେଇ କନେକ୍ଟ କରନ୍ତୁ)", font=("Segoe UI", 10, "bold"), bg="#ffffff", fg="#059669", padx=14, pady=10)
+        card_login.pack(fill=tk.X, padx=8, pady=(4, 6))
+
+        tk.Label(card_login, text="💡 କୌଣସି ଫାଇଲ୍ ଡାଉନଲୋଡ୍ କରିବା ଦରକାର ନାହିଁ। ନିଜ ରେଜିଷ୍ଟର୍ଡ ମୋବାଇଲ୍ ଓ ପାସୱାର୍ଡ ଦିଅନ୍ତୁ:", font=("Segoe UI", 8), bg="#ffffff", fg="#64748b").grid(row=0, column=0, columnspan=4, sticky="w", pady=(0, 6))
+
+        tk.Label(card_login, text="Mobile Number:", font=("Segoe UI", 9, "bold"), bg="#ffffff", fg="#334155").grid(row=1, column=0, sticky="w", pady=3)
+        self.ent_login_mobile = tk.Entry(card_login, font=("Segoe UI", 9), width=18)
+        self.ent_login_mobile.grid(row=1, column=1, sticky="w", padx=6, pady=3)
+        if self.cfg.get("mobile"):
+            self.ent_login_mobile.insert(0, self.cfg.get("mobile"))
+
+        tk.Label(card_login, text="Password:", font=("Segoe UI", 9, "bold"), bg="#ffffff", fg="#334155").grid(row=1, column=2, sticky="w", padx=(10, 0), pady=3)
+        self.ent_login_pwd = tk.Entry(card_login, font=("Segoe UI", 9), width=16, show="*")
+        self.ent_login_pwd.grid(row=1, column=3, sticky="w", padx=6, pady=3)
+
+        self.btn_do_login = tk.Button(card_login, text="🚀 ଲଗ୍ଇନ୍ ଏବଂ ଅଟୋ-କନେକ୍ଟ", font=("Segoe UI", 9, "bold"), bg="#059669", fg="#ffffff", padx=14, pady=3, relief="flat", cursor="hand2", command=self.login_with_credentials)
+        self.btn_do_login.grid(row=2, column=1, columnspan=3, sticky="w", padx=6, pady=6)
+
+        self.lbl_login_msg = tk.Label(card_login, text="", font=("Segoe UI", 8, "bold"), bg="#ffffff", fg="#059669")
+        self.lbl_login_msg.grid(row=3, column=0, columnspan=4, sticky="w", pady=(2, 0))
+
+        # 1. Cloud Credentials Card (Advanced)
+        card_sync = tk.LabelFrame(self.tab_settings, text="🔗 Advanced: Manual Cloud Link (Shop ID & Token)", font=("Segoe UI", 10, "bold"), bg="#ffffff", fg="#1e3a8a", padx=14, pady=10)
+        card_sync.pack(fill=tk.X, padx=8, pady=6)
 
         # Server URL
         tk.Label(card_sync, text="Cloud Server URL:", font=("Segoe UI", 9, "bold"), bg="#ffffff", fg="#334155").grid(row=0, column=0, sticky="w", pady=4)
@@ -528,6 +562,93 @@ class SmartPrintApp:
         else:
             p = self.cb_single.get() or "None"
             self.lbl_routing_summary.configure(text=f"Active Printer: {p}")
+
+    def login_with_credentials(self):
+        server = self.ent_server.get().strip().rstrip("/")
+        if not server:
+            server = "https://smartprint-xvt8.onrender.com"
+            self.ent_server.delete(0, tk.END)
+            self.ent_server.insert(0, server)
+
+        raw_mobile = self.ent_login_mobile.get().strip()
+        mobile = "".join(filter(str.isdigit, raw_mobile))
+        if len(mobile) > 10 and mobile.startswith("91"):
+            mobile = mobile[2:]
+        if len(mobile) > 10 and mobile.startswith("0"):
+            mobile = mobile[1:]
+
+        pwd = self.ent_login_pwd.get().strip()
+
+        if len(mobile) != 10:
+            self.lbl_login_msg.configure(text="❌ ଦୟାକରି ସଠିକ୍ ୧୦-ଅଙ୍କ ମୋବାଇଲ୍ ନମ୍ବର ଦିଅନ୍ତୁ", fg="#ef4444")
+            return
+        if not pwd:
+            self.lbl_login_msg.configure(text="❌ ଦୟାକରି ଆପଣଙ୍କ ପାସୱାର୍ଡ ଦିଅନ୍ତୁ", fg="#ef4444")
+            return
+
+        self.btn_do_login.configure(state=tk.DISABLED, text="⏳ ଯାଞ୍ଚ ହେଉଛି...")
+        self.lbl_login_msg.configure(text="ସର୍ଭର ସହ ସଂଯୋଗ ହେଉଛି...", fg="#2563eb")
+
+        def perform_login():
+            try:
+                url = f"{server}/api/auth/login"
+                payload = json.dumps({"mobile": mobile, "password": pwd}).encode("utf-8")
+                req = urllib.request.Request(
+                    url,
+                    data=payload,
+                    headers={"Content-Type": "application/json", "User-Agent": "SmartPrintDesktop/1.0"}
+                )
+                with urllib.request.urlopen(req, timeout=10) as resp:
+                    data = json.loads(resp.read().decode("utf-8"))
+
+                shop = data.get("shop", {})
+                token = data.get("token") or shop.get("connector_token")
+                shop_id = shop.get("shop_id")
+
+                if not shop_id or not token:
+                    raise Exception("Server returned empty shop credentials")
+
+                self.cfg["server_url"] = server
+                self.cfg["shop_id"] = shop_id
+                self.cfg["token"] = token
+                self.cfg["shop_name"] = shop.get("shop_name", "")
+                self.cfg["mobile"] = mobile
+                save_config(self.cfg)
+
+                def on_success():
+                    self.btn_do_login.configure(state=tk.NORMAL, text="🚀 ଲଗ୍ଇନ୍ ଏବଂ ଅଟୋ-କନେକ୍ଟ")
+                    self.lbl_login_msg.configure(text=f"✅ ସଫଳ ହେଲା! Connected to: {shop.get('shop_name')}", fg="#059669")
+                    self.ent_shop_id.delete(0, tk.END)
+                    self.ent_shop_id.insert(0, shop_id)
+                    self.ent_token.delete(0, tk.END)
+                    self.ent_token.insert(0, token)
+                    self.ent_login_pwd.delete(0, tk.END)
+                    self.verify_cloud_connection()
+                    messagebox.showinfo("Login Success", f"✅ ସଫଳତାର ସହ ସଂଯୁକ୍ତ ହୋଇଗଲା!\n\nଦୋକାନ: {shop.get('shop_name')}\nShop ID: {shop_id}\n\nଆପଣଙ୍କ ସେଟିଂସ୍ Windows AppData ରେ ସ୍ଥାୟୀ ଭାବେ ସେଭ୍ ହୋଇଗଲା।")
+                    self.notebook.select(self.tab_dashboard)
+
+                self.root.after(0, on_success)
+            except urllib.error.HTTPError as he:
+                msg = "ଭୁଲ୍ ମୋବାଇଲ୍ ନମ୍ବର କିମ୍ବା ପାସୱାର୍ଡ!"
+                try:
+                    err_json = json.loads(he.read().decode("utf-8"))
+                    if err_json.get("detail"):
+                        msg = err_json["detail"]
+                except Exception:
+                    pass
+                def on_fail():
+                    self.btn_do_login.configure(state=tk.NORMAL, text="🚀 ଲଗ୍ଇନ୍ ଏବଂ ଅଟୋ-କନେକ୍ଟ")
+                    self.lbl_login_msg.configure(text=f"❌ {msg}", fg="#ef4444")
+                    messagebox.showerror("Login Error", f"ଲଗ୍ଇନ୍ ବିଫଳ ହେଲା:\n{msg}")
+                self.root.after(0, on_fail)
+            except Exception as ex:
+                def on_err():
+                    self.btn_do_login.configure(state=tk.NORMAL, text="🚀 ଲଗ୍ଇନ୍ ଏବଂ ଅଟୋ-କନେକ୍ଟ")
+                    self.lbl_login_msg.configure(text=f"❌ କନେକ୍ସନ୍ ଏରର୍: {ex}", fg="#ef4444")
+                    messagebox.showerror("Connection Error", f"ସର୍ଭର ସହ କନେକ୍ଟ ହୋଇପାରିଲା ନାହିଁ:\n{ex}")
+                self.root.after(0, on_err)
+
+        threading.Thread(target=perform_login, daemon=True).start()
 
     def save_settings_from_ui(self):
         self.cfg["server_url"] = self.ent_server.get().strip().rstrip("/")

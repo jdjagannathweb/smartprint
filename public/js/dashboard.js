@@ -31,8 +31,9 @@ document.addEventListener("DOMContentLoaded", async () => {
     localStorage.setItem("current_shop_id", currentShopId);
   }
 
-  // If no shop session, redirect to login immediately
-  if (!currentShopId) {
+  // If no shop session or no auth token, redirect to login immediately
+  const hasToken = localStorage.getItem("shop_auth_token") || sessionStorage.getItem("superadmin_pin") || localStorage.getItem("superadmin_pin");
+  if (!currentShopId || !hasToken) {
     window.location.href = "/login";
     return;
   }
@@ -183,7 +184,7 @@ async function loadShopDetails() {
     }
     const shop = await res.json();
     currentShop = shop;
-    if (shop.connector_token && !localStorage.getItem("shop_auth_token")) {
+    if (shop.connector_token) {
       localStorage.setItem("shop_auth_token", shop.connector_token);
     }
 
@@ -211,7 +212,7 @@ async function loadShopDetails() {
     const dispShopId = document.getElementById("dispShopId");
     if (dispShopId) dispShopId.value = shop.shop_id || "";
     const dispToken = document.getElementById("dispConnectorToken");
-    if (dispToken) dispToken.value = shop.connector_token || "";
+    if (dispToken) dispToken.value = shop.connector_token || localStorage.getItem("shop_auth_token") || "";
     const btnCfgJson = document.getElementById("btnDownloadConfigJson");
     if (btnCfgJson) btnCfgJson.href = `/api/connector/config/${shop.shop_id}${tokenQuery}`;
 

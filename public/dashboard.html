@@ -288,18 +288,30 @@
               </span>
             </div>
 
-            <!-- DESKTOP CREDENTIALS BOX (SHOP ID & TOKEN) -->
-            <div style="background: #ffffff; border: 2px dashed #059669; border-radius: 12px; padding: 16px 20px; margin-top: 18px; box-shadow: 0 2px 8px rgba(0,0,0,0.04);">
-              <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px; margin-bottom: 8px;">
-                <h4 style="margin: 0; color: #065f46; font-size: 1rem; display: flex; align-items: center; gap: 6px;">
-                  <span>🔑</span> Smart Print Connect Windows App ଲିଙ୍କ୍ ଡିଟେଲ୍ସ (Shop ID & Token)
+            <!-- DESKTOP CREDENTIALS BOX (MOBILE LOGIN & APP LINK) -->
+            <div style="background: #ffffff; border: 2px dashed #059669; border-radius: 14px; padding: 18px 20px; margin-top: 18px; box-shadow: 0 4px 12px rgba(0,0,0,0.03);">
+              <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px; margin-bottom: 10px;">
+                <h4 style="margin: 0; color: #065f46; font-size: 1.05rem; display: flex; align-items: center; gap: 8px;">
+                  <span>🚀</span> Smart Print Connect Windows App ଲିଙ୍କ୍
                 </h4>
-                <span style="font-size: 0.78rem; background: #ecfdf5; color: #047857; padding: 2px 8px; border-radius: 6px; font-weight: 700;">
-                  କମ୍ପ୍ୟୁଟର ଆପ୍ ରେ ଏହି ଦୁଇଟି ଦିଅନ୍ତୁ
+                <span style="font-size: 0.8rem; background: #ecfdf5; color: #047857; padding: 3px 10px; border-radius: 6px; font-weight: 700;">
+                  ✨ Zero-Download / କୌଣସି ଫାଇଲ୍ ରଖିବା ଦରକାର ନାହିଁ
                 </span>
               </div>
-              <p style="font-size: 0.84rem; color: #475569; margin: 0 0 14px; line-height: 1.5;">
-                ନିଜ PC ରେ <b>SmartPrintConnect.exe</b> ଖୋଲି ତଳେ ଥିବା <b>Shop ID</b> ଏବଂ <b>Connector Token</b> ପେଷ୍ଟ୍ କରନ୍ତୁ, ଏବଂ <b>Verify & Sync Account</b> ଉପରେ କ୍ଲିକ୍ କରନ୍ତୁ:
+
+              <!-- EASY LOGIN HIGHLIGHT -->
+              <div style="background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 10px; padding: 12px 16px; margin-bottom: 16px;">
+                <div style="font-weight: 800; color: #166534; font-size: 0.95rem; display: flex; align-items: center; gap: 6px; margin-bottom: 4px;">
+                  <span>📱</span> ସବୁଠାରୁ ସହଜ ଉପାୟ (Direct Login):
+                </div>
+                <p style="margin: 0; font-size: 0.88rem; color: #1e3a8a; line-height: 1.5;">
+                  ନିଜ PC ରେ <b>SmartPrintConnect.exe</b> ଖୋଲି କେବଳ ନିଜ <b>ମୋବାଇଲ୍ ନମ୍ବର ଏବଂ ପାସୱାର୍ଡ</b> ଦେଇ ଲଗ୍ଇନ୍ କରନ୍ତୁ! ଆପେ ଆପେ ସିଙ୍କ୍ ହୋଇ ପ୍ରିଣ୍ଟ୍ ଆରମ୍ଭ ହୋଇଯିବ। କୌଣସି ଫାଇଲ୍ Download କରି Downloads ଫୋଲ୍ଡରରେ ରଖିବାକୁ ପଡ଼ିବ ନାହିଁ।
+                </p>
+              </div>
+
+              <!-- MANUAL CREDENTIALS (ADVANCED / OPTIONAL) -->
+              <p style="font-size: 0.82rem; color: #64748b; margin: 0 0 10px; font-weight: 600;">
+                ବୈକଳ୍ପିକ (Optional Manual Credentials):
               </p>
               <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 14px;">
                 <div>
@@ -316,14 +328,6 @@
                     <button class="btn btn-sm btn-outline" style="border-color: #059669; color: #059669; font-weight: 700; white-space: nowrap;" onclick="copyInputText('dispConnectorToken', 'Connector Token Copy ହେଲା!')">📋 Copy</button>
                   </div>
                 </div>
-              </div>
-              <div style="margin-top: 14px; padding-top: 12px; border-top: 1px dashed #cbd5e1; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px;">
-                <a id="btnDownloadConfigJson" href="#" class="btn btn-sm" style="background: #047857; color: #ffffff; font-weight: 700; text-decoration: none; padding: 8px 14px; border-radius: 6px;">
-                  📥 Download connector_config.json (ଅଟୋମେଟିକ୍ ସେଟଅପ୍)
-                </a>
-                <span style="font-size: 0.78rem; color: #64748b;">
-                  💡 <b>ସୁବିଧା ଉପାୟ:</b> ଏହି ଫାଇଲ୍ ଟିକୁ Download କରି `SmartPrintConnect.exe` ଥିବା Downloads ଫୋଲ୍ଡରରେ ରଖିଦେଲେ କିଛି ଲେଖିବାକୁ ପଡ଼ିବ ନାହିଁ, ଆପେ ଆପେ ସିଙ୍କ୍ ହୋଇଯିବ!
-                </span>
               </div>
             </div>
 
